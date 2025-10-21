@@ -1,0 +1,48 @@
+{
+    "manifest_version": 3,
+    "name": "News Summarizer",
+    "version": "1.0.0",
+    "description": "Summarize news articles using Gemini Nano AI",
+    "permissions": [
+        "storage",
+        "tabs",
+        "scripting",
+        "activeTab"
+    ],
+    "host_permissions": [
+        "https://www.bbc.com/*",
+        "https://www.npr.org/*",
+        "https://feeds.bbci.co.uk/*"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_popup": "popup/popup.html",
+        "default_title": "News Summarizer"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content-scripts/newsFetcher.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "utils/*"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ],
+    "trial_tokens": [
+        "AsBYVNhj3BMtLrznx98UbnZp9XTKsvj8Uz9umdVLASNOWibAAiUzWHSVMWtvU2WoCZ2xuvTStMfFd4jFyYVxMwcAAAB7eyJvcmlnaW4iOiJjaHJvbWUtZXh0ZW5zaW9uOi8vZ2RtcGprbWRpZGljaWNuZGZqZmtibWNhZ2libGphbXAiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDB9"
+    ]
+}

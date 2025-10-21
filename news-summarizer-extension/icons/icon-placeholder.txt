@@ -1,0 +1,10 @@
+You need to add a 128x128 PNG icon file named "icon.png" in this folder.
+
+For testing, you can:
+1. Create a simple 128x128 PNG icon using any image editor
+2. Download a news/newspaper icon from free icon sites like:
+   - https://www.flaticon.com/
+   - https://icons8.com/
+   - https://feathericons.com/
+
+Save it as "icon.png" in this icons folder.
