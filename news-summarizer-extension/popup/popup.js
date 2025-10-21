@@ -171,6 +171,7 @@ class NewsPopup {
         } else if (response && (response.summaries || response.message)) {
           // Handle case where we have a message but no summaries
           if (response.summaries && response.summaries.length === 0 && response.message) {
+            // Pass through the detailed error message from background script
             reject(new Error(response.message));
             return;
           }
@@ -243,7 +244,12 @@ class NewsPopup {
     
     if (!summaries || summaries.length === 0) {
       if (searchKeywords) {
-        this.showError(`No news articles found for keywords: "${searchKeywords}". Try different keywords or leave empty for general news.`);
+        // More specific error message based on time range
+        if (dateRange === '2 weeks') {
+          this.showError(`No articles found matching keywords: "${searchKeywords}" in the past 2 weeks. Try different keywords, check spelling, or remove keywords for general news.`);
+        } else {
+          this.showError(`No articles found matching keywords: "${searchKeywords}" in the past 24 hours. Try different keywords, check spelling, or remove keywords for general news.`);
+        }
       } else {
         this.showError('No news articles found');
       }
@@ -1109,7 +1115,10 @@ Or simply open news-dashboard/index.html in your browser!
 
     const sourceStyle = {
       bbc: 'BBC-style professional, international perspective',
-      npr: 'NPR-style thoughtful, in-depth analysis'
+      npr: 'NPR-style thoughtful, in-depth analysis',
+      nytimes: 'New York Times-style comprehensive, investigative reporting',
+      nbcnews: 'NBC News-style breaking news and current affairs',
+      foxnews: 'Fox News-style conservative perspective and analysis'
     };
 
     const newsTopics = {

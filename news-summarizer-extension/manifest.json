@@ -12,7 +12,13 @@
     "host_permissions": [
         "https://www.bbc.com/*",
         "https://www.npr.org/*",
-        "https://feeds.bbci.co.uk/*"
+        "https://feeds.bbci.co.uk/*",
+        "https://www.nytimes.com/*",
+        "https://rss.nytimes.com/*",
+        "https://www.nbcnews.com/*",
+        "https://feeds.nbcnews.com/*",
+        "https://www.foxnews.com/*",
+        "https://moxie.foxnews.com/*"
     ],
     "background": {
         "service_worker": "background.js"

@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="popup.css">
 </head>
+
 <body>
   <div class="container">
     <h1>News Summarizer</h1>
-    
+
     <div class="section">
       <h3>Select News Sources</h3>
       <div class="checkbox-group">
@@ -18,6 +20,18 @@
         <label>
           <input type="checkbox" id="npr" value="npr">
           NPR
+        </label>
+        <label>
+          <input type="checkbox" id="nytimes" value="nytimes">
+          New York Times
+        </label>
+        <label>
+          <input type="checkbox" id="nbcnews" value="nbcnews">
+          NBC News
+        </label>
+        <label>
+          <input type="checkbox" id="foxnews" value="foxnews">
+          Fox News
         </label>
       </div>
     </div>
@@ -33,10 +47,6 @@
           <input type="radio" name="newsType" value="world">
           World News
         </label>
-        <label>
-          <input type="radio" name="newsType" value="tech">
-          Technology
-        </label>
       </div>
     </div>
 
@@ -44,9 +54,10 @@
       <h3>🔍 Keyword Search (Optional)</h3>
       <div class="keyword-group">
         <div style="display: flex; gap: 4px; margin-bottom: 4px;">
-          <input type="text" id="keywordInput" placeholder="Enter keywords (e.g., canada, climate, AI, election)" 
-                 style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
-          <button id="clearKeywordsBtn" style="padding: 8px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
+          <input type="text" id="keywordInput" placeholder="Enter keywords (e.g., canada, climate, AI, election)"
+            style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+          <button id="clearKeywordsBtn"
+            style="padding: 8px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
             Clear
           </button>
         </div>
@@ -62,7 +73,7 @@
       <div id="spinner" class="spinner hidden"></div>
     </button>
 
-     <!--<button id="testBtn" class="test-button" style="margin-top: 8px; padding: 6px 12px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+    <!--<button id="testBtn" class="test-button" style="margin-top: 8px; padding: 6px 12px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
       Test Link (Google)
     </button>
 
@@ -74,7 +85,8 @@
       📊 Open Dashboard
     </button>-->
 
-    <div id="aiStatus" class="ai-status" style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px; display: none;">
+    <div id="aiStatus" class="ai-status"
+      style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px; display: none;">
       <div id="aiStatusText"></div>
     </div>
 
@@ -88,4 +100,5 @@
 
   <script src="popup.js"></script>
 </body>
+
 </html>

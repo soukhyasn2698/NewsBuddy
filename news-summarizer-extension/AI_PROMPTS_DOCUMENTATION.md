@@ -15,7 +15,10 @@ This document explains where and how AI prompts are used to fetch news from part
 createAIPromptForWebsite(source, newsType) {
   const prompts = {
     bbc: `Generate 3 current BBC-style news articles...`,
-    npr: `Generate 3 current NPR-style news articles...`
+    npr: `Generate 3 current NPR-style news articles...`,
+    nytimes: `Generate 3 current New York Times-style news articles...`,
+    nbcnews: `Generate 3 current NBC News-style news articles...`,
+    foxnews: `Generate 3 current Fox News-style news articles...`
   };
   return prompts[source];
 }
@@ -56,7 +59,7 @@ Topics: Social issues, cultural perspectives, policy implications.
 ## How AI Prompts Are Used
 
 ### Step 1: User Selects Sources
-User checks boxes for BBC and NPR in the popup
+User checks boxes for BBC, NPR, New York Times, NBC News, and Fox News in the popup
 
 ### Step 2: Fetch Process Begins
 1. **RSS Attempt**: Try to fetch real RSS feeds (usually blocked by CORS)

@@ -115,6 +115,25 @@ class NewsBackground {
 
       const finalArticles = filteredArticles.slice(0, 10);
       console.log(`Fetched ${finalArticles.length} articles from RSS feeds (${dateRange} range)`);
+      
+      // If no articles found with keywords, provide specific error message
+      if (finalArticles.length === 0 && keywords && keywords.trim()) {
+        let errorMessage;
+        if (dateRange === '2 weeks') {
+          errorMessage = `No articles found matching keywords: "${keywords}" in the past 2 weeks. Try different keywords, check spelling, or remove keywords for general news.`;
+        } else {
+          errorMessage = `No articles found matching keywords: "${keywords}" in the past 24 hours. Try different keywords, check spelling, or remove keywords for general news.`;
+        }
+        
+        sendResponse({
+          articles: [],
+          dateRange: dateRange,
+          keywordSearch: true,
+          message: errorMessage
+        });
+        return;
+      }
+      
       console.log('Final articles being sent to popup:');
       finalArticles.forEach((article, i) => {
         console.log(`  ${i + 1}. "${article.title?.substring(0, 40)}..." -> ${article.url}`);
@@ -156,6 +175,16 @@ class NewsBackground {
       ],
       bbc: [
         'https://feeds.bbci.co.uk/news/rss.xml' // Main BBC feed
+      ],
+      nytimes: [
+        'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',
+        'https://rss.nytimes.com/services/xml/rss/nyt/TopStories.xml'
+      ],
+      nbcnews: [
+        'https://feeds.nbcnews.com/nbcnews/public/news'
+      ],
+      foxnews: [
+        'https://moxie.foxnews.com/google-publisher/latest.xml'
       ]
     };
 
@@ -269,15 +298,27 @@ class NewsBackground {
       bbc: {
         'world-us-canada': 'https://www.bbc.com/news/world-us-canada',
         business: 'https://www.bbc.com/news/business',
-        world: 'https://www.bbc.com/news/world',
-        technology: 'https://www.bbc.com/news/technology',
-        'science-environment': 'https://www.bbc.com/news/science-environment'
+        world: 'https://www.bbc.com/news/world'
       },
       npr: {
         politics: 'https://www.npr.org/sections/politics/',
         world: 'https://www.npr.org/sections/world/',
-        technology: 'https://www.npr.org/sections/technology/',
         business: 'https://www.npr.org/sections/business/'
+      },
+      nytimes: {
+        politics: 'https://www.nytimes.com/section/us/politics',
+        world: 'https://www.nytimes.com/section/world',
+        us: 'https://www.nytimes.com/section/us'
+      },
+      nbcnews: {
+        politics: 'https://www.nbcnews.com/politics',
+        world: 'https://www.nbcnews.com/world',
+        us: 'https://www.nbcnews.com/news/us-news'
+      },
+      foxnews: {
+        politics: 'https://www.foxnews.com/politics',
+        world: 'https://www.foxnews.com/world',
+        us: 'https://www.foxnews.com/us'
       }
     };
 
@@ -289,122 +330,19 @@ class NewsBackground {
     // Fallback to main section pages
     const fallbackUrls = {
       bbc: 'https://www.bbc.com/news',
-      npr: 'https://www.npr.org/sections/news/'
+      npr: 'https://www.npr.org/sections/news/',
+      nytimes: 'https://www.nytimes.com',
+      nbcnews: 'https://www.nbcnews.com',
+      foxnews: 'https://www.foxnews.com'
     };
 
     return fallbackUrls[source] || `https://www.${source}.com`;
   }
 
   generateSampleArticles(source, newsType) {
-    // Generate sample articles when RSS feeds are not available
-    // This ensures the extension always has content to display
-    console.log(`🎯 [${new Date().toLocaleTimeString()}] Generating sample articles for ${source.toUpperCase()} - ${newsType}`);
-
-    const sampleArticles = {
-      bbc: {
-        us: [
-          {
-            title: "US Political Landscape Shifts with New Policy Initiatives",
-            content: "Recent political developments in Washington are reshaping the national agenda, with new policy initiatives addressing key domestic challenges.",
-            url: this.generateWorkingArticleUrl('bbc', 'world-us-canada', 'us-political-landscape-policy-initiatives')
-          },
-          {
-            title: "American Economic Indicators Point to Continued Growth",
-            content: "Latest economic data suggests sustained growth in key sectors of the American economy, with positive implications for employment and investment.",
-            url: this.generateWorkingArticleUrl('bbc', 'business', 'american-economic-indicators-growth')
-          }
-        ],
-        world: [
-          {
-            title: "Global Financial Markets Demonstrate Resilience",
-            content: "International financial markets continue to show stability despite ongoing global uncertainties, with investors maintaining confidence in long-term prospects.",
-            url: this.generateWorkingArticleUrl('bbc', 'business', 'global-financial-markets-resilience')
-          },
-          {
-            title: "International Cooperation Strengthens on Global Challenges",
-            content: "Countries worldwide are enhancing diplomatic cooperation to address shared challenges including climate change, security, and economic stability.",
-            url: this.generateWorkingArticleUrl('bbc', 'world', 'international-cooperation-global-challenges')
-          }
-        ],
-        tech: [
-          {
-            title: "Digital Innovation Transforms Traditional Industries",
-            content: "Ongoing digital transformation is revolutionizing traditional industries, creating new opportunities for efficiency and innovation across multiple sectors.",
-            url: this.generateWorkingArticleUrl('bbc', 'technology', 'digital-innovation-transforms-industries')
-          },
-          {
-            title: "Renewable Energy Technology Achieves New Milestones",
-            content: "Significant advances in renewable energy technology are making clean energy more accessible and efficient, supporting global sustainability goals.",
-            url: this.generateWorkingArticleUrl('bbc', 'science-environment', 'renewable-energy-technology-milestones')
-          }
-        ]
-      }
-    };
-
-    // Add sample articles for NPR with realistic article URLs
-    if (!sampleArticles[source]) {
-      const today = new Date();
-      const dateStr = today.toISOString().split('T')[0].replace(/-/g, '/');
-
-      sampleArticles[source] = {
-        us: [
-          {
-            title: "Congressional Leaders Debate Infrastructure Spending in Heated Session [UPDATED]",
-            content: "House and Senate leaders engaged in intense discussions over the proposed infrastructure bill, with both parties seeking compromise on key provisions.",
-            url: this.generateWorkingArticleUrl(source, 'politics', 'latest-us-political-developments')
-          }
-        ],
-        world: [
-          {
-            title: "International Climate Summit Yields New Commitments from Major Nations [UPDATED]",
-            content: "World leaders at the climate summit announced significant new commitments to reduce carbon emissions and increase renewable energy investments.",
-            url: this.generateWorkingArticleUrl(source, 'world', 'international-news-updates')
-          }
-        ],
-        tech: [
-          {
-            title: "Breakthrough in Quantum Computing Research Shows Promise for Future Applications [UPDATED]",
-            content: "Researchers have achieved a significant breakthrough in quantum computing that could revolutionize data processing and cybersecurity applications.",
-            url: this.generateWorkingArticleUrl(source, 'technology', 'innovation-report')
-          }
-        ]
-      };
-    }
-
-    const categoryArticles = sampleArticles[source][newsType] || sampleArticles[source].us || [];
-
-    const finalArticles = categoryArticles.map((article, index) => {
-      // Generate timestamps for sample articles with variety
-      const now = new Date();
-      let publishedDate;
-
-      // Mix of recent and older articles for more realistic distribution
-      if (index === 0) {
-        // First article is very recent (1-6 hours ago)
-        const hoursAgo = Math.floor(Math.random() * 6) + 1;
-        const minutesAgo = Math.floor(Math.random() * 60);
-        publishedDate = new Date(now.getTime() - (hoursAgo * 60 * 60 * 1000) - (minutesAgo * 60 * 1000));
-      } else {
-        // Other articles can be older (1-7 days ago for variety)
-        const daysAgo = Math.floor(Math.random() * 7) + 1;
-        const hoursAgo = Math.floor(Math.random() * 24);
-        publishedDate = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000) - (hoursAgo * 60 * 60 * 1000));
-      }
-
-      const finalArticle = {
-        title: article.title,
-        url: article.url,
-        content: article.content,
-        source: source.toUpperCase(),
-        publishedDate: publishedDate,
-        timeAgo: this.getTimeAgo(publishedDate)
-      };
-
-      console.log(`🔍 Generated sample article for ${source}: "${finalArticle.title}"`);
-      return finalArticle;
-    });
-
-    return finalArticles;
+    // No longer generate sample articles - only use real RSS feeds
+    console.log(`⚠️ [${new Date().toLocaleTimeString()}] No sample articles for ${source.toUpperCase()} - only using real RSS feeds`);
+    return [];
   }
 
   getRSSUrls(source, newsType) {
@@ -412,8 +350,7 @@ class NewsBackground {
     const urls = {
       bbc: {
         us: ['https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml'],
-        world: ['https://feeds.bbci.co.uk/news/world/rss.xml'],
-        tech: ['https://feeds.bbci.co.uk/news/technology/rss.xml']
+        world: ['https://feeds.bbci.co.uk/news/world/rss.xml']
       },
       npr: {
         us: [
@@ -422,9 +359,34 @@ class NewsBackground {
         ],
         world: [
           'https://feeds.npr.org/1004/rss.xml'
+        ]
+      },
+      nytimes: {
+        us: [
+          'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
+          'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml'
         ],
-        tech: [
-          'https://feeds.npr.org/1019/rss.xml'
+        world: [
+          'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+          'https://rss.nytimes.com/services/xml/rss/nyt/International.xml'
+        ]
+      },
+      nbcnews: {
+        us: [
+          'https://feeds.nbcnews.com/nbcnews/public/news',
+          'https://feeds.nbcnews.com/nbcnews/public/politics'
+        ],
+        world: [
+          'https://feeds.nbcnews.com/nbcnews/public/world'
+        ]
+      },
+      foxnews: {
+        us: [
+          'https://moxie.foxnews.com/google-publisher/politics.xml',
+          'https://moxie.foxnews.com/google-publisher/national.xml'
+        ],
+        world: [
+          'https://moxie.foxnews.com/google-publisher/world.xml'
         ]
       }
     };
@@ -460,17 +422,31 @@ class NewsBackground {
       }
 
       console.log('Background: Fetching articles from RSS feeds...');
-      const articles = await this.fetchArticles(sources, newsType, keywords);
+      const result = await this.fetchArticles(sources, newsType, keywords);
+      const articles = result.articles;
+      const searchInfo = result.searchInfo;
+      
       console.log('Background: Got articles:', articles.length);
 
       if (articles.length === 0) {
-        // Instead of throwing an error, provide helpful message
+        // Provide specific error messages based on search type and time range
         console.log('No articles found, this might be due to RSS feed issues or keyword filtering');
+        
+        let errorMessage;
+        if (keywords && keywords.trim()) {
+          if (searchInfo.expandedSearch) {
+            errorMessage = `No articles found matching keywords: "${keywords}" in the past 2 weeks. Try different keywords, check spelling, or remove keywords for general news.`;
+          } else {
+            errorMessage = `No articles found matching keywords: "${keywords}" in the past 24 hours. Try different keywords, check spelling, or remove keywords for general news.`;
+          }
+        } else {
+          errorMessage = 'No articles available at the moment. This might be due to RSS feed connectivity issues. Please try again later.';
+        }
+        
         sendResponse({
           summaries: [],
-          message: keywords ?
-            `No articles found matching keywords: "${keywords}". Try different keywords or remove them for general news.` :
-            'No articles available at the moment. This might be due to RSS feed connectivity issues. Please try again later.'
+          message: errorMessage,
+          searchInfo: searchInfo
         });
         return;
       }
@@ -479,7 +455,10 @@ class NewsBackground {
       const summaries = await this.summarizeArticles(articles);
       console.log('Background: Got summaries:', summaries.length);
 
-      sendResponse({ summaries });
+      sendResponse({ 
+        summaries: summaries,
+        searchInfo: searchInfo
+      });
     } catch (error) {
       console.error('Background: Error in handleFetchNews:', error);
       sendResponse({ error: error.message });
@@ -500,7 +479,15 @@ class NewsBackground {
 
     // Filter by keywords if provided with adaptive date range
     let filteredArticles = allArticles;
+    let searchInfo = {
+      dateRange: '24 hours',
+      keywordSearch: false,
+      expandedSearch: false,
+      websiteSearch: false
+    };
+
     if (keywords && keywords.trim()) {
+      searchInfo.keywordSearch = true;
       filteredArticles = this.filterArticlesByKeywords(allArticles, keywords);
       console.log(`Filtered ${allArticles.length} articles to ${filteredArticles.length} based on keywords: "${keywords}"`);
 
@@ -514,29 +501,35 @@ class NewsBackground {
 
         if (expandedFiltered.length > filteredArticles.length) {
           filteredArticles = expandedFiltered;
+          searchInfo.dateRange = '2 weeks';
+          searchInfo.expandedSearch = true;
           console.log(`Expanded search found ${filteredArticles.length} articles in past 2 weeks`);
         }
 
-        // If still not enough results, try website search for BBC and NPR
+        // If still not enough results, try website search
         if (filteredArticles.length < 3) {
-          console.log(`Still only ${filteredArticles.length} articles. Trying website search for BBC and NPR...`);
+          console.log(`Still only ${filteredArticles.length} articles. Trying website search...`);
           const websiteArticles = await this.searchWebsitesForKeywords(sources, keywords);
           if (websiteArticles.length > 0) {
             filteredArticles = [...filteredArticles, ...websiteArticles];
+            searchInfo.websiteSearch = true;
             console.log(`Website search found ${websiteArticles.length} additional articles`);
           }
         }
       }
     }
 
-    return filteredArticles.slice(0, 10); // Limit to 10 articles for performance
+    return {
+      articles: filteredArticles.slice(0, 10), // Limit to 10 articles for performance
+      searchInfo: searchInfo
+    };
   }
 
   async searchWebsitesForKeywords(sources, keywords) {
     const websiteArticles = [];
 
     for (const source of sources) {
-      if (source === 'bbc' || source === 'npr') {
+      if (['bbc', 'npr', 'nytimes', 'nbcnews', 'foxnews'].includes(source)) {
         try {
           console.log(`🔍 Searching ${source.toUpperCase()} website for keywords: "${keywords}"`);
           const articles = await this.searchWebsite(source, keywords);
@@ -554,7 +547,10 @@ class NewsBackground {
   async searchWebsite(source, keywords) {
     const searchUrls = {
       bbc: `https://www.bbc.com/search?q=${encodeURIComponent(keywords)}`,
-      npr: `https://www.npr.org/search?query=${encodeURIComponent(keywords)}&page=1`
+      npr: `https://www.npr.org/search?query=${encodeURIComponent(keywords)}&page=1`,
+      nytimes: `https://www.nytimes.com/search?query=${encodeURIComponent(keywords)}`,
+      nbcnews: `https://www.nbcnews.com/search/?q=${encodeURIComponent(keywords)}`,
+      foxnews: `https://www.foxnews.com/search-results/search?q=${encodeURIComponent(keywords)}`
     };
 
     const searchUrl = searchUrls[source];

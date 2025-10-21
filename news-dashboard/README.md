@@ -56,7 +56,7 @@ The dashboard automatically syncs with your Chrome extension:
 
 ### Search & Filtering
 - **Search**: Find articles by title, summary, or source
-- **Source Filter**: Filter by BBC, NPR
+- **Source Filter**: Filter by BBC, NPR, New York Times, NBC News, Fox News
 - **Date Filter**: Today, This Week, This Month, All Time
 - **Category Filter**: US News, World News, Technology
 

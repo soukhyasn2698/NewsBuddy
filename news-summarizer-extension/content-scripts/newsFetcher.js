@@ -75,7 +75,9 @@ class NewsFetcher {
       'bbc.com': 'BBC',
       'bbc.co.uk': 'BBC',
       'npr.org': 'NPR',
-      'nytimes.com': 'New York Times',
+      'nytimes.com': 'NEW YORK TIMES',
+      'nbcnews.com': 'NBC NEWS',
+      'foxnews.com': 'FOX NEWS',
       'washingtonpost.com': 'Washington Post',
       'theguardian.com': 'The Guardian'
     };
