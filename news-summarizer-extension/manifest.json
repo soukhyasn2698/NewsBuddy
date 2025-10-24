@@ -18,7 +18,10 @@
         "https://www.nbcnews.com/*",
         "https://feeds.nbcnews.com/*",
         "https://www.foxnews.com/*",
-        "https://moxie.foxnews.com/*"
+        "https://moxie.foxnews.com/*",
+        "https://api.allorigins.win/*",
+        "https://corsproxy.io/*",
+        "https://feeds.npr.org/*"
     ],
     "background": {
         "service_worker": "background.js"

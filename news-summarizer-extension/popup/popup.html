@@ -36,6 +36,7 @@
       </div>
     </div>
 
+    <!-- News Type section commented out - using general news feeds instead
     <div class="section">
       <h3>News Type</h3>
       <div class="radio-group">
@@ -49,6 +50,7 @@
         </label>
       </div>
     </div>
+    -->
 
     <div class="section">
       <h3>🔍 Keyword Search (Optional)</h3>
@@ -91,8 +93,28 @@
     </div>
 
     <div id="results" class="results hidden">
-      <h3>News Summaries</h3>
-      <div id="summaryList"></div>
+      <div class="results-container">
+        <!-- Left Column: Individual Articles -->
+        <div class="articles-column">
+          <h3>📰 News Articles</h3>
+          <div id="summaryList"></div>
+        </div>
+        
+        <!-- Right Column: Overall Summary -->
+        <div class="summary-column">
+          <div class="summary-header">
+            <h3>📋 AI Analysis</h3>
+            <div id="summaryMethodBadge" class="method-badge" style="display: none;"></div>
+          </div>
+          <div id="overallSummaryContainer">
+            <div id="summaryLoadingState" class="summary-loading">
+              <div class="summary-spinner"></div>
+              <p>Analyzing content...</p>
+            </div>
+            <div id="overallSummaryContent" class="summary-content"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="error" class="error hidden"></div>

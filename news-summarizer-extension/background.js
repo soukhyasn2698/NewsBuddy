@@ -346,52 +346,37 @@ class NewsBackground {
   }
 
   getRSSUrls(source, newsType) {
-    // Use RSS feeds that are known to work with CORS or provide fallback content
+    // Use general RSS feeds since news type selection is removed
+    // Combining multiple feeds for broader coverage
     const urls = {
-      bbc: {
-        us: ['https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml'],
-        world: ['https://feeds.bbci.co.uk/news/world/rss.xml']
-      },
-      npr: {
-        us: [
-          'https://feeds.npr.org/1001/rss.xml',
-          'https://feeds.npr.org/1003/rss.xml'
-        ],
-        world: [
-          'https://feeds.npr.org/1004/rss.xml'
-        ]
-      },
-      nytimes: {
-        us: [
-          'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
-          'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml'
-        ],
-        world: [
-          'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
-          'https://rss.nytimes.com/services/xml/rss/nyt/International.xml'
-        ]
-      },
-      nbcnews: {
-        us: [
-          'https://feeds.nbcnews.com/nbcnews/public/news',
-          'https://feeds.nbcnews.com/nbcnews/public/politics'
-        ],
-        world: [
-          'https://feeds.nbcnews.com/nbcnews/public/world'
-        ]
-      },
-      foxnews: {
-        us: [
-          'https://moxie.foxnews.com/google-publisher/politics.xml',
-          'https://moxie.foxnews.com/google-publisher/national.xml'
-        ],
-        world: [
-          'https://moxie.foxnews.com/google-publisher/world.xml'
-        ]
-      }
+      bbc: [
+        'https://feeds.bbci.co.uk/news/rss.xml', // Main BBC feed
+        'https://feeds.bbci.co.uk/news/world/rss.xml', // World news
+        'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml' // US news
+      ],
+      npr: [
+        'https://feeds.npr.org/1001/rss.xml', // News
+        'https://feeds.npr.org/1003/rss.xml', // All Things Considered
+        'https://feeds.npr.org/1004/rss.xml'  // World news
+      ],
+      nytimes: [
+        'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', // Home page
+        'https://rss.nytimes.com/services/xml/rss/nyt/US.xml', // US news
+        'https://rss.nytimes.com/services/xml/rss/nyt/World.xml' // World news
+      ],
+      nbcnews: [
+        'https://feeds.nbcnews.com/nbcnews/public/news', // General news
+        'https://feeds.nbcnews.com/nbcnews/public/politics', // Politics
+        'https://feeds.nbcnews.com/nbcnews/public/world' // World news
+      ],
+      foxnews: [
+        'https://moxie.foxnews.com/google-publisher/latest.xml', // Latest news
+        'https://moxie.foxnews.com/google-publisher/politics.xml', // Politics
+        'https://moxie.foxnews.com/google-publisher/world.xml' // World news
+      ]
     };
 
-    return urls[source]?.[newsType] || urls[source]?.us || [];
+    return urls[source] || [];
   }
 
   filterArticlesByKeywords(articles, keywords) {
@@ -451,8 +436,11 @@ class NewsBackground {
         return;
       }
 
-      console.log('Background: Summarizing articles...');
-      const summaries = await this.summarizeArticles(articles);
+      console.log('Background: Fetching full article content from hyperlinks...');
+      const articlesWithFullContent = await this.fetchFullArticleContent(articles);
+      
+      console.log('Background: Summarizing articles with full content...');
+      const summaries = await this.summarizeArticles(articlesWithFullContent);
       console.log('Background: Got summaries:', summaries.length);
 
       sendResponse({ 
@@ -679,6 +667,286 @@ class NewsBackground {
       .trim();
   }
 
+  async fetchFullArticleContent(articles) {
+    console.log(`🔍 Fetching full content for ${articles.length} articles...`);
+    const articlesWithContent = [];
+
+    for (let i = 0; i < articles.length; i++) {
+      const article = articles[i];
+      console.log(`📰 Processing article ${i + 1}/${articles.length}: "${article.title.substring(0, 50)}..."`);
+
+      try {
+        const fullContent = await this.extractArticleContent(article.url, article.source);
+        
+        if (fullContent && fullContent.length > 200) {
+          console.log(`✅ Extracted ${fullContent.length} characters of content from ${article.source}`);
+          articlesWithContent.push({
+            ...article,
+            content: fullContent,
+            hasFullContent: true
+          });
+        } else {
+          console.log(`⚠️ Could not extract full content, using RSS summary for ${article.source}`);
+          articlesWithContent.push({
+            ...article,
+            hasFullContent: false
+          });
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching content for ${article.url}:`, error.message);
+        articlesWithContent.push({
+          ...article,
+          hasFullContent: false
+        });
+      }
+
+      // Add small delay to avoid overwhelming servers
+      if (i < articles.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(`📊 Successfully extracted full content for ${articlesWithContent.filter(a => a.hasFullContent).length}/${articles.length} articles`);
+    return articlesWithContent;
+  }
+
+  async extractArticleContent(url, source) {
+    try {
+      console.log(`🌐 Fetching full article from: ${url}`);
+
+      // Use CORS proxy to fetch the article page
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const html = data.contents;
+
+      if (!html || html.length < 100) {
+        throw new Error('Empty or invalid HTML content');
+      }
+
+      console.log(`✅ Fetched HTML content (${html.length} chars) from ${source}`);
+
+      // Extract article content based on source-specific selectors
+      const content = this.parseArticleContent(html, source, url);
+      
+      if (content && content.length > 200) {
+        console.log(`📄 Extracted article content: ${content.length} characters`);
+        return content;
+      } else {
+        throw new Error('Could not extract meaningful content');
+      }
+
+    } catch (error) {
+      console.error(`❌ Failed to extract content from ${url}:`, error.message);
+
+      // Try alternative CORS proxy
+      try {
+        console.log(`🔄 Trying alternative proxy for ${url}...`);
+        const altProxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const altResponse = await fetch(altProxyUrl);
+
+        if (altResponse.ok) {
+          const html = await altResponse.text();
+          const content = this.parseArticleContent(html, source, url);
+          
+          if (content && content.length > 200) {
+            console.log(`✅ Alternative proxy succeeded: ${content.length} characters`);
+            return content;
+          }
+        }
+      } catch (altError) {
+        console.error(`❌ Alternative proxy also failed:`, altError.message);
+      }
+
+      return null;
+    }
+  }
+
+  parseArticleContent(html, source, url) {
+    try {
+      // Common article content selectors for different news sources
+      const contentSelectors = {
+        bbc: [
+          'div[data-component="text-block"]',
+          '.story-body__inner',
+          '[data-component="text-block"] p',
+          'article p',
+          '.gel-body-copy'
+        ],
+        npr: [
+          '.storytext p',
+          '#storytext p',
+          '.transcript p',
+          'article p',
+          '.story-text p'
+        ],
+        nytimes: [
+          '.StoryBodyCompanionColumn p',
+          '.css-53u6y8 p',
+          'section[name="articleBody"] p',
+          'article p',
+          '.story-content p'
+        ],
+        nbcnews: [
+          '.ArticleBody-articleBody p',
+          '.InlineVideo-container ~ p',
+          'article p',
+          '.story-text p'
+        ],
+        foxnews: [
+          '.article-body p',
+          '.article-text p',
+          'article p',
+          '.story-content p'
+        ]
+      };
+
+      const sourceKey = source.toLowerCase().replace(/\s+/g, '');
+      const selectors = contentSelectors[sourceKey] || ['article p', '.content p', '.story p', 'p'];
+
+      let extractedText = '';
+
+      // Try each selector until we find content
+      for (const selector of selectors) {
+        const matches = this.extractTextBySelector(html, selector);
+        if (matches && matches.length > 200) {
+          extractedText = matches;
+          console.log(`✅ Content extracted using selector: ${selector}`);
+          break;
+        }
+      }
+
+      // Fallback: extract all paragraph text if specific selectors fail
+      if (!extractedText || extractedText.length < 200) {
+        console.log(`⚠️ Specific selectors failed, trying fallback extraction for ${source}`);
+        extractedText = this.extractFallbackContent(html);
+      }
+
+      // Clean and validate the extracted text
+      if (extractedText && extractedText.length > 200) {
+        const cleanText = this.cleanExtractedText(extractedText);
+        
+        // Ensure we have substantial content (not just navigation/ads)
+        if (cleanText.length > 300 && this.isValidArticleContent(cleanText)) {
+          console.log(`📄 Successfully extracted ${cleanText.length} characters of article content`);
+          return cleanText.substring(0, 3000); // Limit to 3000 chars for performance
+        }
+      }
+
+      console.log(`❌ Could not extract valid article content from ${url}`);
+      return null;
+
+    } catch (error) {
+      console.error(`❌ Error parsing article content:`, error.message);
+      return null;
+    }
+  }
+
+  extractTextBySelector(html, selector) {
+    try {
+      // Simple regex-based extraction since we can't use DOM parser in service worker
+      let content = '';
+
+      if (selector.includes('p')) {
+        // Extract paragraph content
+        const paragraphRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+        const matches = html.match(paragraphRegex) || [];
+        
+        content = matches
+          .map(match => {
+            const textMatch = match.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+            return textMatch ? this.cleanHTMLText(textMatch[1]) : '';
+          })
+          .filter(text => text.length > 20) // Filter out short paragraphs
+          .join(' ')
+          .trim();
+      } else {
+        // Try to extract content from div or other containers
+        const containerRegex = new RegExp(`<${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^>]*>([\\s\\S]*?)<\\/[^>]+>`, 'gi');
+        const matches = html.match(containerRegex) || [];
+        
+        content = matches
+          .map(match => this.cleanHTMLText(match))
+          .join(' ')
+          .trim();
+      }
+
+      return content;
+    } catch (error) {
+      console.error(`Error extracting text with selector ${selector}:`, error.message);
+      return '';
+    }
+  }
+
+  extractFallbackContent(html) {
+    try {
+      // Extract all paragraph content as fallback
+      const paragraphRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+      const matches = html.match(paragraphRegex) || [];
+      
+      const paragraphs = matches
+        .map(match => {
+          const textMatch = match.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+          return textMatch ? this.cleanHTMLText(textMatch[1]) : '';
+        })
+        .filter(text => {
+          // Filter out navigation, ads, and other non-article content
+          const lowerText = text.toLowerCase();
+          return text.length > 30 && 
+                 !lowerText.includes('cookie') &&
+                 !lowerText.includes('subscribe') &&
+                 !lowerText.includes('newsletter') &&
+                 !lowerText.includes('advertisement') &&
+                 !lowerText.includes('follow us') &&
+                 !lowerText.includes('share this') &&
+                 !lowerText.includes('related articles');
+        });
+
+      return paragraphs.join(' ').trim();
+    } catch (error) {
+      console.error('Error in fallback content extraction:', error.message);
+      return '';
+    }
+  }
+
+  cleanExtractedText(text) {
+    if (!text) return '';
+
+    return text
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/\n+/g, ' ') // Replace newlines with spaces
+      .replace(/\t+/g, ' ') // Replace tabs with spaces
+      .replace(/[^\w\s.,!?;:'"()-]/g, '') // Remove special characters but keep punctuation
+      .trim();
+  }
+
+  isValidArticleContent(text) {
+    if (!text || text.length < 300) return false;
+
+    // Check if the text looks like article content (not navigation/ads)
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    
+    // Should have multiple sentences
+    if (sentences.length < 3) return false;
+
+    // Check for common non-article patterns
+    const lowerText = text.toLowerCase();
+    const badPatterns = [
+      'click here', 'subscribe now', 'advertisement', 'sponsored content',
+      'follow us on', 'share this article', 'related stories', 'trending now'
+    ];
+
+    const badPatternCount = badPatterns.filter(pattern => lowerText.includes(pattern)).length;
+    
+    // If more than 2 bad patterns, probably not article content
+    return badPatternCount <= 2;
+  }
+
   parseRSSContent(content, source, expandedRange = false) {
     const articles = [];
 
@@ -830,15 +1098,26 @@ class NewsBackground {
 
     for (const article of articles) {
       try {
-        // Use simple text truncation since Gemini Nano is not available in service workers
-        const summary = this.fallbackSummarize(article.content);
+        let summary;
+        
+        if (article.hasFullContent && article.content.length > 500) {
+          // Enhanced summarization for full article content
+          console.log(`📄 Creating enhanced summary for full article: "${article.title.substring(0, 40)}..."`);
+          summary = this.enhancedSummarize(article.content, article.title);
+        } else {
+          // Basic summarization for RSS content
+          console.log(`📰 Creating basic summary for RSS content: "${article.title.substring(0, 40)}..."`);
+          summary = this.fallbackSummarize(article.content);
+        }
+
         summaries.push({
           title: article.title,
           url: article.url,
           summary: summary,
           source: article.source,
           category: 'News',
-          timeAgo: 'Recent'
+          timeAgo: article.timeAgo || 'Recent',
+          hasFullContent: article.hasFullContent || false
         });
       } catch (error) {
         console.error('Error summarizing article:', error);
@@ -849,12 +1128,97 @@ class NewsBackground {
           summary: article.content.substring(0, 150) + '...',
           source: article.source,
           category: 'News',
-          timeAgo: 'Recent'
+          timeAgo: article.timeAgo || 'Recent',
+          hasFullContent: false
         });
       }
     }
 
+    console.log(`📊 Summarization complete: ${summaries.filter(s => s.hasFullContent).length}/${summaries.length} with full content`);
     return summaries;
+  }
+
+  enhancedSummarize(fullContent, title) {
+    try {
+      // Split content into sentences
+      const sentences = fullContent.split(/[.!?]+/).filter(s => s.trim().length > 15);
+      
+      if (sentences.length === 0) {
+        return fullContent.substring(0, 200) + '...';
+      }
+
+      // Extract key information from the full article
+      const keyPoints = this.extractKeyPoints(sentences, title);
+      
+      // Create a comprehensive summary
+      if (keyPoints.length > 0) {
+        return keyPoints.join(' ') + (keyPoints.join(' ').length < fullContent.length * 0.1 ? ' Additional details available in full article.' : '');
+      } else {
+        // Fallback to first few sentences
+        return sentences.slice(0, 3).join('. ') + (sentences.length > 3 ? '.' : '');
+      }
+    } catch (error) {
+      console.error('Error in enhanced summarization:', error);
+      return this.fallbackSummarize(fullContent);
+    }
+  }
+
+  extractKeyPoints(sentences, title) {
+    const keyPoints = [];
+    const titleWords = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    
+    // Score sentences based on relevance
+    const scoredSentences = sentences.map(sentence => {
+      const lowerSentence = sentence.toLowerCase();
+      let score = 0;
+      
+      // Higher score for sentences containing title keywords
+      titleWords.forEach(word => {
+        if (lowerSentence.includes(word)) {
+          score += 2;
+        }
+      });
+      
+      // Higher score for sentences with key news indicators
+      const newsKeywords = [
+        'said', 'announced', 'reported', 'according to', 'officials', 'government',
+        'president', 'minister', 'spokesperson', 'confirmed', 'revealed', 'stated',
+        'investigation', 'policy', 'decision', 'agreement', 'deal', 'plan', 'program'
+      ];
+      
+      newsKeywords.forEach(keyword => {
+        if (lowerSentence.includes(keyword)) {
+          score += 1;
+        }
+      });
+      
+      // Higher score for sentences with numbers/statistics
+      if (/\d+/.test(sentence)) {
+        score += 1;
+      }
+      
+      // Lower score for very short or very long sentences
+      if (sentence.length < 50 || sentence.length > 200) {
+        score -= 1;
+      }
+      
+      return { sentence: sentence.trim(), score };
+    });
+    
+    // Sort by score and take top sentences
+    const topSentences = scoredSentences
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .map(item => item.sentence);
+    
+    // If we have good sentences, use them
+    if (topSentences.length >= 2) {
+      return topSentences;
+    }
+    
+    // Fallback to first few sentences
+    return sentences.slice(0, 3).map(s => s.trim());
   }
 
   fallbackSummarize(text) {

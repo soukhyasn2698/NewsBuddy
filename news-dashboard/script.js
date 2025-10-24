@@ -31,9 +31,10 @@ class NewsDashboard {
             this.filterArticles();
         });
 
-        document.getElementById('categoryFilter').addEventListener('change', () => {
-            this.filterArticles();
-        });
+        // Category filter commented out since news types are removed
+        // document.getElementById('categoryFilter').addEventListener('change', () => {
+        //     this.filterArticles();
+        // });
 
         // Action buttons
         document.getElementById('refreshBtn').addEventListener('click', () => {
@@ -168,7 +169,8 @@ class NewsDashboard {
         const searchTerm = document.getElementById('searchInput').value.toLowerCase();
         const sourceFilter = document.getElementById('sourceFilter').value;
         const dateFilter = document.getElementById('dateFilter').value;
-        const categoryFilter = document.getElementById('categoryFilter').value;
+        // Category filter removed since news types are no longer used
+        const categoryFilter = '';
 
         this.filteredArticles = this.articles.filter(article => {
             // Search filter

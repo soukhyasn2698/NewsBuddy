@@ -176,53 +176,12 @@ class NewsPopup {
           }
           console.log('Got summaries from background:', response.summaries?.length || 0);
 
-          // If we have a working AI model, re-summarize with AI
-          console.log('Checking AI availability:', {
-            workingLanguageModel: !!this.workingLanguageModel,
-            LanguageModelAvailable: typeof LanguageModel !== 'undefined',
-            userActivation: navigator.userActivation?.isActive
+          // Use articles from background script directly
+          resolve({
+            summaries: response.summaries,
+            dateRange: response.dateRange || '24 hours',
+            keywordSearch: response.keywordSearch || false
           });
-
-          if (this.workingLanguageModel || typeof LanguageModel !== 'undefined') {
-            console.log('Generating fresh news articles with Prompt API...');
-
-            try {
-              const aiGeneratedNews = await this.generateNewsWithPromptAPI(sources, keywords);
-              console.log('AI news generation complete:', aiGeneratedNews.length, 'articles');
-              resolve(aiGeneratedNews);
-            } catch (error) {
-              console.error('AI news generation failed, falling back to summarization:', error);
-              // Fallback: re-summarize background articles
-              console.log('Re-summarizing background articles with AI...');
-              const aiSummaries = [];
-
-              for (const summary of response.summaries) {
-                try {
-                  const aiSummary = await this.summarizeWithAi(summary.summary);
-                  aiSummaries.push({
-                    ...summary,
-                    summary: aiSummary
-                  });
-                } catch (error) {
-                  console.error('AI summarization failed for article:', error);
-                  aiSummaries.push(summary);
-                }
-              }
-
-              console.log('AI summarization complete');
-              resolve({
-                summaries: aiSummaries,
-                dateRange: response.dateRange || '24 hours',
-                keywordSearch: response.keywordSearch || false
-              });
-            }
-          } else {
-            resolve({
-              summaries: response.summaries,
-              dateRange: response.dateRange || '24 hours',
-              keywordSearch: response.keywordSearch || false
-            });
-          }
         } else {
           console.error('Invalid response format:', response);
           reject(new Error('Invalid response from background script'));
@@ -474,145 +433,25 @@ class NewsPopup {
     }
   }
 
-  async generateSummaryWithGeminiNano() {
+  async generateSummaryWithEnhancedSummarizer() {
     try {
-      console.log('🤖 Manual Enhanced Chrome Summarizer API call...');
+      console.log('🤖 Using Enhanced Chrome Summarizer API...');
 
-      // Try enhanced Summarizer API first
-      if (typeof Summarizer !== 'undefined') {
-        console.log('✅ Using enhanced Summarizer API for manual call');
-        await this.useEnhancedSummarizerAPI();
-        return;
+      // Check if Enhanced Summarizer API is available
+      if (typeof Summarizer === 'undefined') {
+        throw new Error('Enhanced Summarizer API not available');
       }
 
-      // Check if the standard Summarizer API is available
-      if (!window.ai || !window.ai.summarizer) {
-        throw new Error('Chrome Summarizer API not available');
-      }
-
-      // Check capabilities
-      const capabilities = await window.ai.summarizer.capabilities();
-      console.log('📊 Summarizer capabilities:', capabilities);
-
-      if (capabilities.available === 'no') {
-        throw new Error('Summarizer not supported on this device');
-      }
-
-      if (capabilities.available === 'after-download') {
-        console.log('⏳ Summarizer model downloading...');
-        const overallSummaryContent = document.getElementById('overallSummaryContent');
-        if (overallSummaryContent) {
-          overallSummaryContent.innerHTML = '<p style="color: #666; font-style: italic;">📥 Downloading AI model... Please wait and try again in a moment.</p>';
-          overallSummaryContent.style.display = 'block';
-        }
-        return;
-      }
-
-      console.log('✅ Creating summarizer session...');
-
-      // Create summarizer session with optimal settings
-      const summarizerConfig = this.getSummarizerConfig();
-      console.log('⚙️ Manual summarizer config:', summarizerConfig);
-
-      const summarizer = await window.ai.summarizer.create(summarizerConfig);
-
-      // Prepare content using the same method as automatic summarization
-      const articlesText = this.prepareContentForSummarization();
-
-      console.log(`📄 Sending ${articlesText.length} characters to summarizer...`);
-
-      // Generate summary
-      const summary = await summarizer.summarize(articlesText);
-      console.log("Soukhya SUmmary=summary");
-      // Clean up the session
-      summarizer.destroy();
-      console.log('✅ Manual summary generated and session cleaned up');
-
-      this.displayOverallSummary(summary);
+      console.log('✅ Enhanced Summarizer API found');
+      await this.useEnhancedSummarizerAPI();
 
     } catch (error) {
-      console.error('Gemini Nano Summarizer failed:', error);
-      // Fallback to Language Model
-      await this.generateSummaryWithLanguageModel();
+      console.error('Enhanced Summarizer failed:', error);
+      this.showError('Enhanced Summarizer API not available. Please ensure you have Chrome 127+ with AI features enabled.');
     }
   }
 
-  async generateSummaryWithLanguageModel() {
-    try {
-      let languageModel = this.workingLanguageModel;
 
-      // Create language model if not available
-      if (!languageModel) {
-        if (typeof LanguageModel !== 'undefined') {
-          languageModel = await LanguageModel.create({
-            systemPrompt: 'You are a professional news summarizer. Create concise bullet-point summaries of news articles.'
-          });
-        } else {
-          throw new Error('Language Model not available');
-        }
-      }
-
-      // Create prompt for overall summary
-      const articlesText = this.currentArticles.map((article, index) =>
-        `${index + 1}. ${article.source}: ${article.title}\n   ${article.summary}`
-      ).join('\n\n');
-
-      const isSingleArticle = this.currentArticles.length === 1;
-      const prompt = isSingleArticle
-        ? `Please analyze this news article and extract the key points in bullet format. Focus on the main facts, important details, and implications:
-
-${articlesText}
-
-Key Points Analysis:`
-        : `Please create a concise bullet-point summary of these ${this.currentArticles.length} news articles. Focus on the key points and main themes. Format as bullet points:
-
-${articlesText}
-
-Summary:`;
-
-      console.log('Sending prompt to Language Model');
-      const summary = await languageModel.prompt(prompt);
-
-      console.log('Generated summary:', summary);
-      this.displayOverallSummary(summary);
-
-    } catch (error) {
-      console.error('Language Model failed:', error);
-      // Fallback to simple summary
-      this.generateFallbackSummary();
-    }
-  }
-
-  generateFallbackSummary() {
-    console.log('Using fallback summary generation');
-
-    // Group articles by source
-    const sourceGroups = {};
-    this.currentArticles.forEach(article => {
-      if (!sourceGroups[article.source]) {
-        sourceGroups[article.source] = [];
-      }
-      sourceGroups[article.source].push(article);
-    });
-
-    // Create bullet point summary
-    let summaryPoints = [];
-
-    Object.keys(sourceGroups).forEach(source => {
-      const articles = sourceGroups[source];
-      if (articles.length === 1) {
-        summaryPoints.push(`**${source}**: ${articles[0].title}`);
-      } else {
-        summaryPoints.push(`**${source}** (${articles.length} articles):`);
-        articles.forEach(article => {
-          summaryPoints.push(`  • ${article.title}`);
-        });
-      }
-    });
-
-    const fallbackSummary = summaryPoints.join('\n');
-    this.displayOverallSummary(fallbackSummary);
-  }
 
   displayOverallSummary(summaryText) {
     const overallSummaryContent = document.getElementById('overallSummaryContent');
@@ -679,33 +518,22 @@ Summary:`;
     console.log('Overall summary displayed with analysis depth indicator');
   }
 
-  // Automatic summary generation functions (simplified versions of the manual ones)
-  // Chrome Summarizer API implementation following official documentation
-  // Enhanced Chrome Summarizer API implementation with advanced options
-  async generateSummaryWithGeminiNanoAuto() {
+  // Enhanced Summarizer API - Automatic Generation
+  async generateSummaryWithEnhancedSummarizerAuto() {
     try {
-      console.log('🤖 Checking Enhanced Chrome Summarizer API availability...');
+      console.log('🤖 Using Enhanced Chrome Summarizer API for automatic generation...');
 
-      // Check if the enhanced Summarizer API is available
-      if (typeof Summarizer !== 'undefined') {
-        console.log('✅ Found enhanced Summarizer API (Summarizer.create)');
-        await this.useEnhancedSummarizerAPI();
-        return;
+      // Check if Enhanced Summarizer API is available
+      if (typeof Summarizer === 'undefined') {
+        throw new Error('Enhanced Summarizer API not available');
       }
 
-      // Fallback to window.ai.summarizer if enhanced API not available
-      if (!window.ai || !window.ai.summarizer) {
-        console.log('❌ Chrome Summarizer API not available');
-        throw new Error('Summarizer API not available');
-      }
-
-      console.log('📊 Using fallback window.ai.summarizer API');
-      await this.useFallbackSummarizerAPI();
+      console.log('✅ Enhanced Summarizer API found');
+      await this.useEnhancedSummarizerAPI();
 
     } catch (error) {
-      console.error('❌ Chrome Summarizer API failed:', error);
-      console.log('🔄 Falling back to Language Model...');
-      await this.generateSummaryWithLanguageModelAuto();
+      console.error('❌ Enhanced Summarizer API failed:', error);
+      throw error; // Re-throw to be handled by the caller
     }
   }
 
@@ -745,43 +573,10 @@ Summary:`;
 
     // Display results
     this.displayOverallSummary(summary);
-    this.showMethodBadge('gemini-nano', '🚀 Enhanced Gemini');
+    this.showMethodBadge('enhanced-summarizer');
   }
 
-  // Fallback to the standard window.ai.summarizer API
-  async useFallbackSummarizerAPI() {
-    // Check capabilities
-    const capabilities = await window.ai.summarizer.capabilities();
-    console.log('📊 Summarizer capabilities:', capabilities);
 
-    if (capabilities.available === 'no') {
-      throw new Error('Summarizer not supported on this device');
-    }
-
-    if (capabilities.available === 'after-download') {
-      console.log('⏳ Summarizer model needs to be downloaded');
-      this.showSummaryDownloading();
-      this.showMethodBadge('downloading');
-      return;
-    }
-
-    // Create summarizer session with standard config
-    const summarizerConfig = this.getSummarizerConfig();
-    console.log('⚙️ Using standard summarizer config:', summarizerConfig);
-
-    const summarizer = await window.ai.summarizer.create(summarizerConfig);
-
-    // Prepare and summarize content
-    const articlesText = this.prepareContentForSummarization();
-    console.log(`📄 Content prepared: ${articlesText.length} characters`);
-
-    const summary = await summarizer.summarize(articlesText);
-
-    // Clean up and display
-    summarizer.destroy();
-    this.displayOverallSummary(summary);
-    this.showMethodBadge('gemini-nano');
-  }
 
   // Prepare content for summarization following best practices
   prepareContentForSummarization() {
@@ -826,132 +621,7 @@ Please create a comprehensive summary of these ${this.currentArticles.length} ne
     return fullText;
   }
 
-  async generateSummaryWithLanguageModelAuto() {
-    try {
-      let languageModel = this.workingLanguageModel;
 
-      if (!languageModel && typeof LanguageModel !== 'undefined') {
-        languageModel = await LanguageModel.create({
-          systemPrompt: 'You are a professional news summarizer. Create concise bullet-point summaries.'
-        });
-      }
-
-      if (!languageModel) {
-        throw new Error('Language Model not available');
-      }
-
-      const articlesText = this.currentArticles.map((article, index) =>
-        `${index + 1}. ${article.source}: ${article.title}\n   ${article.summary}`
-      ).join('\n\n');
-
-      const isSingleArticle = this.currentArticles.length === 1;
-      const prompt = isSingleArticle
-        ? `Analyze this news article and extract the key points in bullet format. Focus on the main facts, important details, and implications:
-
-${articlesText}
-
-Key Points Analysis:`
-        : `Create a concise bullet-point summary of these ${this.currentArticles.length} news articles:
-
-${articlesText}
-
-Summary:`;
-
-      const summary = await languageModel.prompt(prompt);
-      this.displayOverallSummary(summary);
-      this.showMethodBadge('language-model');
-
-    } catch (error) {
-      console.error('Language Model failed:', error);
-      this.generateFallbackSummaryAuto();
-    }
-  }
-
-  generateFallbackSummaryAuto() {
-    const isSingleArticle = this.currentArticles.length === 1;
-
-    if (isSingleArticle) {
-      // For single article, extract key points from the content
-      const article = this.currentArticles[0];
-      const keyPoints = this.extractKeyPointsFromSingleArticle(article);
-
-      const singleArticleSummary = `**Key Points from ${article.source}:**
-
-• **${article.title}**
-
-${keyPoints.map(point => `• ${point}`).join('\n')}`;
-
-      this.displayOverallSummary(singleArticleSummary);
-      this.showMethodBadge('fallback');
-      return;
-    }
-
-    // For multiple articles, use the existing logic
-    const sourceGroups = {};
-    this.currentArticles.forEach(article => {
-      if (!sourceGroups[article.source]) {
-        sourceGroups[article.source] = [];
-      }
-      sourceGroups[article.source].push(article);
-    });
-
-    let summaryPoints = [];
-
-    Object.keys(sourceGroups).forEach(source => {
-      const articles = sourceGroups[source];
-      if (articles.length === 1) {
-        summaryPoints.push(`**${source}**: ${articles[0].title}`);
-      } else {
-        summaryPoints.push(`**${source}** (${articles.length} articles):`);
-        articles.forEach(article => {
-          summaryPoints.push(`  • ${article.title}`);
-        });
-      }
-    });
-
-    const fallbackSummary = summaryPoints.join('\n');
-    this.displayOverallSummary(fallbackSummary);
-    this.showMethodBadge('fallback');
-  }
-
-  extractKeyPointsFromSingleArticle(article) {
-    const content = article.summary || article.content || '';
-    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 20);
-
-    // Extract the most important sentences as key points
-    const keyPoints = [];
-
-    // Add the first sentence as it usually contains the main point
-    if (sentences.length > 0) {
-      keyPoints.push(sentences[0].trim());
-    }
-
-    // Look for sentences with important keywords
-    const importantKeywords = [
-      'announced', 'reported', 'confirmed', 'revealed', 'stated', 'said',
-      'according to', 'officials', 'government', 'president', 'minister',
-      'investigation', 'policy', 'decision', 'agreement', 'deal'
-    ];
-
-    sentences.slice(1).forEach(sentence => {
-      const lowerSentence = sentence.toLowerCase();
-      const hasImportantKeyword = importantKeywords.some(keyword =>
-        lowerSentence.includes(keyword)
-      );
-
-      if (hasImportantKeyword && keyPoints.length < 4) {
-        keyPoints.push(sentence.trim());
-      }
-    });
-
-    // If we don't have enough key points, add more sentences
-    if (keyPoints.length < 3 && sentences.length > keyPoints.length) {
-      const remainingSentences = sentences.slice(keyPoints.length, keyPoints.length + (3 - keyPoints.length));
-      keyPoints.push(...remainingSentences.map(s => s.trim()));
-    }
-
-    return keyPoints.slice(0, 4); // Limit to 4 key points
-  }
 
   showSummaryDownloading() {
     const overallSummaryContent = document.getElementById('overallSummaryContent');
@@ -1249,29 +919,14 @@ Or simply open news-dashboard/index.html in your browser!
       if (summaryLoadingState) summaryLoadingState.style.display = 'flex';
       if (overallSummaryContent) overallSummaryContent.style.display = 'none';
 
-      console.log('Auto-generating overall summary for', this.currentArticles.length, 'articles');
+      console.log('Auto-generating summary for', this.currentArticles.length, 'articles using Enhanced Summarizer API');
 
-      // Check Chrome Summarizer API support first
-      const summarizerSupport = await this.checkSummarizerSupport();
-      console.log('🔍 Summarizer support check:', summarizerSupport);
-
-      if (summarizerSupport.supported) {
-        console.log('🎯 SUMMARIZATION METHOD: Chrome Summarizer API (Gemini Nano)');
-        await this.generateSummaryWithGeminiNanoAuto();
-      } else if (summarizerSupport.needsDownload) {
-        console.log('🎯 SUMMARIZATION METHOD: Chrome Summarizer API (Model Downloading)');
-        await this.generateSummaryWithGeminiNanoAuto(); // This will show the download message
-      } else if (typeof LanguageModel !== 'undefined' || this.workingLanguageModel) {
-        console.log('🎯 SUMMARIZATION METHOD: Language Model API (Fallback)');
-        await this.generateSummaryWithLanguageModelAuto();
-      } else {
-        console.log('🎯 SUMMARIZATION METHOD: Simple Text Processing (Final Fallback)');
-        this.generateFallbackSummaryAuto();
-      }
+      // Use only Enhanced Summarizer API
+      await this.generateSummaryWithEnhancedSummarizerAuto();
 
     } catch (error) {
-      console.error('Error generating automatic overall summary:', error);
-      this.showSummaryError('Failed to generate summary. Please try again.');
+      console.error('Error generating automatic summary:', error);
+      this.showSummaryError('Enhanced Summarizer API failed. Please ensure you have Chrome 127+ with AI features enabled.');
     } finally {
       // Hide loading state
       if (summaryLoadingState) summaryLoadingState.style.display = 'none';
@@ -1293,40 +948,25 @@ Or simply open news-dashboard/index.html in your browser!
     this.showMethodBadge('error', '❌ Error');
   }
 
-  // Show which summarization method was used
+  // Show Enhanced Summarizer method badge
   showMethodBadge(method, customText = null) {
     const badge = document.getElementById('summaryMethodBadge');
     if (!badge) return;
 
     const badges = {
-      'gemini-nano': {
+      'enhanced-summarizer': {
         class: 'gemini-nano',
-        text: customText || '🤖 Gemini Nano',
-        title: 'Using Chrome Summarizer API with Gemini Nano'
-      },
-      'language-model': {
-        class: 'language-model',
-        text: customText || '🧠 Language Model',
-        title: 'Using Gemini Nano Language Model API'
-      },
-      'fallback': {
-        class: 'fallback',
-        text: customText || '📝 Text Processing',
-        title: 'Using fallback text processing'
-      },
-      'downloading': {
-        class: 'downloading',
-        text: customText || '⏳ Downloading',
-        title: 'AI model is downloading'
+        text: customText || '🚀 Enhanced Summarizer',
+        title: 'Using Chrome Enhanced Summarizer API'
       },
       'error': {
         class: 'fallback',
         text: customText || '❌ Error',
-        title: 'Summarization failed'
+        title: 'Enhanced Summarizer failed'
       }
     };
 
-    const badgeInfo = badges[method] || badges['fallback'];
+    const badgeInfo = badges[method] || badges['enhanced-summarizer'];
 
     badge.className = `method-badge ${badgeInfo.class}`;
     badge.textContent = badgeInfo.text;
@@ -1691,85 +1331,7 @@ Or simply open news-dashboard/index.html in your browser!
       `;
     }
   }
-  async summarizeWithAi(text) {
-    // Try direct LanguageModel first
-    if (this.workingLanguageModel) {
-      try {
-        console.log(`Using ${this.workingApiName} for summarization`);
-
-        const cleanText = text.replace(/\s+/g, ' ').trim();
-        const prompt = `Summarize this news article in exactly 1-2 clear sentences:\n\n${cleanText.substring(0, 1000)}`;
-
-        const result = await this.workingLanguageModel.prompt(prompt);
-        console.log('AI summarization successful');
-        return result.trim();
-
-      } catch (error) {
-        console.error('AI summarization failed:', error);
-        return this.fallbackSummarize(text);
-      }
-    }
-
-    // Try to create new LanguageModel if none exists
-    if (typeof LanguageModel !== 'undefined') {
-      try {
-        console.log('Creating new LanguageModel for summarization');
-        console.log('User activation status:', navigator.userActivation?.isActive);
-
-        const languageModel = await this.createLanguageModel({
-          initialPrompts: [{
-            role: 'system',
-            content: 'You are a professional news summarizer. Create concise, factual summaries of news articles in exactly 1-2 clear sentences. Focus on the main facts and key information.'
-          }]
-        });
-
-        const cleanText = text.replace(/\s+/g, ' ').trim();
-        const prompt = `Summarize this news article in exactly 1-2 clear sentences:\n\n${cleanText.substring(0, 1000)}`;
-
-        const result = await languageModel.prompt(prompt);
-
-        // Store for future use
-        this.workingLanguageModel = languageModel;
-        this.workingApiName = 'LanguageModel';
-
-        console.log('AI summarization successful with new model');
-        return result.trim();
-
-      } catch (error) {
-        console.error('New LanguageModel creation failed:', error);
-        return this.fallbackSummarize(text);
-      }
-    }
-
-    console.log('No AI API available, using fallback');
-    return this.fallbackSummarize(text);
-  }
-
-  fallbackSummarize(text) {
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
-    if (sentences.length === 0) {
-      return text.substring(0, 150) + '...';
-    }
-    return sentences.slice(0, 2).join('. ') + (sentences.length > 2 ? '.' : '');
-  }
-
-  // Wrapper to ensure all LanguageModel.create calls have outputLanguage
-  async createLanguageModel(options = {}) {
-    const defaultOptions = {
-      outputLanguage: "en",
-      initialPrompts: [{
-        role: 'system',
-        content: 'You are a helpful assistant.'
-      }]
-    };
-
-    const mergedOptions = { ...defaultOptions, ...options };
-    console.log('Creating LanguageModel with options:', mergedOptions);
-
-    return await LanguageModel.create(mergedOptions);
-  }
-
-  async generateNewsWithPromptAPI(sources, keywords = '') {
+}
     console.log('Using Prompt API to generate news for:', sources, 'keywords:', keywords);
 
     // First, try to get real news articles with real URLs
@@ -2059,6 +1621,11 @@ Ensure relevance: If keywords are provided, the story must use those keywords as
 }
 
 // Initialize popup when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  new NewsPopup();
+});
+// Ini
+tialize popup when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   new NewsPopup();
 });

@@ -5,11 +5,15 @@ A Chrome extension that fetches and summarizes news articles using Gemini Nano A
 ## Features
 
 - **Multiple News Sources**: Support for BBC, NPR, New York Times, NBC News, and Fox News
-- **Category Selection**: Choose between US News and World News
-- **AI-Powered Summaries**: Uses Gemini Nano for intelligent article summarization
+- **Deep Content Analysis**: Fetches full article content from hyperlinks for comprehensive analysis
+- **Simplified Interface**: Just select news sources and optionally add keywords
+- **AI-Powered Summaries**: Uses Chrome Enhanced Summarizer API exclusively for intelligent article summarization
+- **2-Column Layout**: Articles on the left, automatic overall summary on the right
+- **Automatic Summary**: AI-generated bullet-point summaries appear instantly using Gemini Summarize API
+- **Content Analysis Badges**: Visual indicators showing deep analysis vs RSS summary
 - **User Preferences**: Remembers your selected sources and news types
 - **Clean Interface**: Simple, intuitive popup design
-- **Content Extraction**: Can extract content from news pages you're currently viewing
+- **Enhanced Summarization**: Creates better summaries by analyzing full article content
 
 ## Installation
 
@@ -37,9 +41,10 @@ To use Gemini Nano, you need to:
 
 1. **Click the extension icon** in your Chrome toolbar
 2. **Select news sources** you want to fetch from (BBC, NPR, New York Times, NBC News, Fox News)
-3. **Choose news type** (US or World)
+3. **Optionally add keywords** to search for specific topics
 4. **Click "Fetch & Summarize"** to get AI-generated summaries
-5. **Click on any summary** to read the full article
+5. **View the 2-column layout** with articles on the left and automatic overall summary on the right
+6. **Click on any article title** to read the full article
 
 ## Project Structure
 
