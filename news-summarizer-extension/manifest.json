@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "News Summarizer",
+    "name": "News Buddy",
     "version": "1.0.0",
-    "description": "Summarize news articles using Gemini Nano AI",
+    "description": "Your friendly news companion - fetch and summarize articles using AI",
     "permissions": [
         "storage",
         "tabs",
@@ -28,7 +28,7 @@
     },
     "action": {
         "default_popup": "popup/popup.html",
-        "default_title": "News Summarizer"
+        "default_title": "News Buddy"
     },
     "content_scripts": [
         {

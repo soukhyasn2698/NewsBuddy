@@ -1,6 +1,6 @@
-# News Summarizer Chrome Extension
+# News Buddy Chrome Extension
 
-A Chrome extension that fetches and summarizes news articles using Gemini Nano AI.
+Your friendly news companion - a Chrome extension that fetches and summarizes news articles using AI.
 
 ## Features
 
@@ -20,7 +20,7 @@ A Chrome extension that fetches and summarizes news articles using Gemini Nano A
 1. **Download or Clone** this repository
 2. **Open Chrome** and navigate to `chrome://extensions/`
 3. **Enable Developer Mode** (toggle in top right)
-4. **Click "Load unpacked"** and select the `news-summarizer-extension` folder
+4. **Click "Load unpacked"** and select the `news-buddy-extension` folder
 5. **Get Gemini Nano Access**: 
    - Join the Chrome AI Origin Trial
    - Replace `YOUR_GEMINI_NANO_TRIAL_TOKEN_HERE` in `manifest.json` with your trial token
@@ -42,14 +42,14 @@ To use Gemini Nano, you need to:
 1. **Click the extension icon** in your Chrome toolbar
 2. **Select news sources** you want to fetch from (BBC, NPR, New York Times, NBC News, Fox News)
 3. **Optionally add keywords** to search for specific topics
-4. **Click "Fetch & Summarize"** to get AI-generated summaries
+4. **Click "Get My News"** to fetch and get AI-generated summaries
 5. **View the 2-column layout** with articles on the left and automatic overall summary on the right
 6. **Click on any article title** to read the full article
 
 ## Project Structure
 
 ```
-news-summarizer-extension/
+news-buddy-extension/
 ├── manifest.json          # Extension configuration
 ├── background.js          # Service worker for fetching and processing
 ├── popup/

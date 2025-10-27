@@ -1,5 +1,7 @@
 class NewsPopup {
   constructor() {
+    console.log('🚀 News Buddy popup-clean.js loaded!');
+
     this.fetchBtn = document.getElementById('fetchBtn');
     this.btnText = document.getElementById('btnText');
     this.spinner = document.getElementById('spinner');
@@ -7,21 +9,35 @@ class NewsPopup {
     this.summaryList = document.getElementById('summaryList');
     this.error = document.getElementById('error');
     this.currentArticles = []; // Store current articles for overall summary
+    this.displayedArticles = []; // Store currently displayed articles
+    this.articlesPerPage = 5; // Show 5 articles at a time
+    this.totalArticlesLoaded = 0; // Track total articles loaded
+    this.maxArticles = 10; // Maximum articles allowed (5 + 5)
+    this.currentSources = []; // Store current search parameters
+    this.currentNewsType = '';
+    this.currentKeywords = '';
+
+    console.log('📊 Setup - Max articles:', this.maxArticles);
 
     this.init();
   }
 
   init() {
     this.loadUserPreferences();
-    this.fetchBtn.addEventListener('click', () => this.handleFetch());
 
-    // Add dashboard button
-    const dashboardBtn = document.getElementById('openDashboardBtn');
-    if (dashboardBtn) {
-      dashboardBtn.addEventListener('click', () => {
-        this.openDashboard();
+    // Debug: Check if fetch button exists
+    console.log('🔍 Fetch button found:', !!this.fetchBtn);
+    if (this.fetchBtn) {
+      console.log('✅ Adding click listener to fetch button');
+      this.fetchBtn.addEventListener('click', () => {
+        console.log('🖱️ Fetch button clicked!');
+        this.handleFetch();
       });
+    } else {
+      console.error('❌ Fetch button not found!');
     }
+
+
 
     // Add clear keywords button
     const clearKeywordsBtn = document.getElementById('clearKeywordsBtn');
@@ -32,8 +48,30 @@ class NewsPopup {
       });
     }
 
+    // Add view more button
+    const viewMoreBtn = document.getElementById('viewMoreBtn');
+    if (viewMoreBtn) {
+      viewMoreBtn.addEventListener('click', () => this.handleViewMore());
+    }
+
     // Check Chrome version on load
     this.checkChromeVersion();
+
+    // DEBUG: Check if all elements exist
+    console.log('🔍 Checking DOM elements...');
+    console.log('Fetch Button:', !!this.fetchBtn);
+    console.log('Button Text:', !!this.btnText);
+    console.log('Results:', !!this.results);
+    console.log('Summary List:', !!this.summaryList);
+    console.log('Error:', !!this.error);
+    console.log('View More Container:', !!document.getElementById('viewMoreContainer'));
+    console.log('View More Button:', !!document.getElementById('viewMoreBtn'));
+    console.log('View More Text:', !!document.getElementById('viewMoreText'));
+
+    // Test button click
+    if (this.fetchBtn) {
+      console.log('✅ Fetch button ready for clicks');
+    }
   }
 
   async loadUserPreferences() {
@@ -61,7 +99,9 @@ class NewsPopup {
   }
 
   async handleFetch() {
+    console.log('🚀 handleFetch called!');
     try {
+      console.log('📝 Starting fetch process...');
       this.showLoading(true);
       this.hideError();
       this.hideResults();
@@ -77,16 +117,47 @@ class NewsPopup {
         throw new Error('Please select at least one news source');
       }
 
+      // Step 1: Fetch all articles first
       if (keywords) {
         console.log('Fetching news with keywords:', keywords);
-        this.btnText.textContent = `Searching for "${keywords}"...`;
+        this.btnText.textContent = `Finding articles for "${keywords}"...`;
       } else {
         console.log('Fetching general news');
-        this.btnText.textContent = 'Fetching news...';
+        this.btnText.textContent = 'Finding articles...';
       }
 
-      const result = await this.fetchAndSummarize(selectedSources, newsType, keywords);
-      this.displayResults(result.summaries || result, keywords, result.dateRange);
+      // Store search parameters for "View More" functionality
+      this.currentSources = selectedSources;
+      this.currentNewsType = newsType;
+      this.currentKeywords = keywords;
+
+      const result = await this.fetchAllArticles(selectedSources, newsType, keywords);
+
+      if (!result.articles || result.articles.length === 0) {
+        if (result.message) {
+          throw new Error(result.message);
+        } else {
+          throw new Error('No articles found');
+        }
+      }
+
+      // Reset counters
+      this.displayedArticles = [];
+      this.totalArticlesLoaded = 0;
+
+      console.log('📄 Fetched first batch:', result.articles.length, 'articles');
+
+      // Step 2: Summarize the first 5 articles
+      this.btnText.textContent = `Summarizing ${result.articles.length} articles...`;
+      console.log(`Summarizing first ${result.articles.length} articles...`);
+
+      const summaries = await this.summarizeAllArticles(result.articles);
+      this.displayedArticles = summaries;
+      this.totalArticlesLoaded = summaries.length;
+
+      console.log('✅ Initial batch ready:', this.displayedArticles.length, 'articles displayed');
+
+      this.displayResults(summaries, keywords, result.dateRange, this.totalArticlesLoaded);
 
     } catch (error) {
       this.showError(error.message);
@@ -95,17 +166,17 @@ class NewsPopup {
     }
   }
 
-  async fetchAndSummarize(sources, newsType, keywords = '') {
+  async fetchAllArticles(sources, newsType, keywords = '') {
     return new Promise((resolve, reject) => {
-      console.log('Sending message to background script:', { sources, newsType, keywords });
+      console.log('Fetching articles from background script:', { sources, newsType, keywords });
 
       chrome.runtime.sendMessage({
-        action: 'fetchNews',
+        action: 'fetchArticlesOnly',
         sources,
         newsType,
         keywords
       }, async (response) => {
-        console.log('Received response:', response);
+        console.log('Received articles response:', response);
 
         if (chrome.runtime.lastError) {
           console.error('Runtime error:', chrome.runtime.lastError);
@@ -113,16 +184,15 @@ class NewsPopup {
         } else if (response && response.error) {
           console.error('Response error:', response.error);
           reject(new Error(response.error));
-        } else if (response && (response.summaries || response.message)) {
-          if (response.summaries && response.summaries.length === 0 && response.message) {
+        } else if (response && (response.articles || response.message)) {
+          if (response.articles && response.articles.length === 0 && response.message) {
             reject(new Error(response.message));
             return;
           }
-          console.log('Got summaries from background:', response.summaries?.length || 0);
+          console.log('Got articles from background:', response.articles?.length || 0);
 
-          // Use articles from background script directly
           resolve({
-            summaries: response.summaries,
+            articles: response.articles,
             dateRange: response.dateRange || '24 hours',
             keywordSearch: response.keywordSearch || false
           });
@@ -134,7 +204,135 @@ class NewsPopup {
     });
   }
 
-  displayResults(summaries, keywords = '', dateRange = '24 hours') {
+  async summarizeAllArticles(articles) {
+    return new Promise((resolve, reject) => {
+      console.log('Sending articles for summarization:', articles.length);
+
+      chrome.runtime.sendMessage({
+        action: 'summarizeArticles',
+        articles: articles
+      }, async (response) => {
+        console.log('Received summaries response:', response);
+
+        if (chrome.runtime.lastError) {
+          console.error('Runtime error:', chrome.runtime.lastError);
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (response && response.error) {
+          console.error('Response error:', response.error);
+          reject(new Error(response.error));
+        } else if (response && response.summaries) {
+          console.log('Got summaries from background:', response.summaries.length);
+          resolve(response.summaries);
+        } else {
+          console.error('Invalid response format:', response);
+          reject(new Error('Invalid response from background script'));
+        }
+      });
+    });
+  }
+
+  async fetchMoreArticles(sources, newsType, keywords = '') {
+    return new Promise((resolve, reject) => {
+      // Get URLs of already displayed articles to exclude them
+      const excludeUrls = this.displayedArticles.map(article => article.url);
+      console.log('Fetching MORE articles from background script:', { sources, newsType, keywords, excludeUrls: excludeUrls.length });
+
+      chrome.runtime.sendMessage({
+        action: 'fetchMoreArticles',
+        sources,
+        newsType,
+        keywords,
+        excludeUrls
+      }, async (response) => {
+        console.log('Received MORE articles response:', response);
+
+        if (chrome.runtime.lastError) {
+          console.error('Runtime error:', chrome.runtime.lastError);
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (response && response.error) {
+          console.error('Response error:', response.error);
+          reject(new Error(response.error));
+        } else if (response && (response.articles || response.message)) {
+          if (response.articles && response.articles.length === 0 && response.message) {
+            reject(new Error(response.message));
+            return;
+          }
+          console.log('Got MORE articles from background:', response.articles?.length || 0);
+
+          resolve({
+            articles: response.articles,
+            dateRange: response.dateRange || '24 hours',
+            keywordSearch: response.keywordSearch || false
+          });
+        } else {
+          console.error('Invalid response format:', response);
+          reject(new Error('Invalid response from background script'));
+        }
+      });
+    });
+  }
+
+  async handleViewMore() {
+    try {
+      const viewMoreBtn = document.getElementById('viewMoreBtn');
+      const viewMoreText = document.getElementById('viewMoreText');
+      const viewMoreSpinner = document.getElementById('viewMoreSpinner');
+
+      // Show loading state
+      viewMoreBtn.disabled = true;
+      viewMoreText.textContent = 'Fetching more articles...';
+      viewMoreSpinner.classList.remove('hidden');
+
+      console.log('🔄 Fetching 5 more articles...');
+      console.log('📋 Currently displayed articles:', this.displayedArticles.length);
+      console.log('🔗 URLs to exclude:', this.displayedArticles.map(a => a.url));
+
+      // Fetch 5 more articles from the server
+      const result = await this.fetchMoreArticles(this.currentSources, this.currentNewsType, this.currentKeywords);
+
+      if (!result.articles || result.articles.length === 0) {
+        throw new Error('No more articles available');
+      }
+
+      console.log(`📰 Got ${result.articles.length} more articles`);
+
+      // Update loading text
+      viewMoreText.textContent = `Summarizing ${result.articles.length} more articles...`;
+
+      // Summarize the new batch
+      const summaries = await this.summarizeAllArticles(result.articles);
+
+      // Add to displayed articles
+      this.displayedArticles = [...this.displayedArticles, ...summaries];
+      this.totalArticlesLoaded += summaries.length;
+
+      console.log(`✅ Total articles now: ${this.totalArticlesLoaded}`);
+
+      // Update the display
+      this.appendArticlesToDisplay(summaries);
+
+      // Update view more button visibility (hide it since we've reached max 10)
+      this.updateViewMoreButton();
+
+      // Regenerate AI summary with all displayed articles
+      await this.generateOverallSummaryAutomatically();
+
+    } catch (error) {
+      console.error('Error loading more articles:', error);
+      this.showError(error.message);
+    } finally {
+      // Reset button state
+      const btn = document.getElementById('viewMoreBtn');
+      const text = document.getElementById('viewMoreText');
+      const spinner = document.getElementById('viewMoreSpinner');
+
+      if (btn) btn.disabled = false;
+      if (text) text.textContent = 'View More Articles';
+      if (spinner) spinner.classList.add('hidden');
+    }
+  }
+
+  displayResults(summaries, keywords = '', dateRange = '24 hours', totalAvailable = 0) {
     console.log('=== DISPLAY RESULTS DEBUG ===');
     console.log('Summaries received:', summaries);
     console.log('Number of summaries:', summaries?.length);
@@ -167,11 +365,14 @@ class NewsPopup {
 
     statusHeader.style.cssText = `background: ${headerColor}; padding: 8px; border-radius: 4px; margin-bottom: 12px; font-size: 11px; color: ${textColor}; border-left: 3px solid ${borderColor};`;
 
-    let statusText = `📅 <strong>Latest News:</strong> Past ${dateRange} • ${summaries.length} articles found`;
+    const showingCount = this.totalArticlesLoaded;
+    const maxPossible = this.maxArticles;
+
+    let statusText = `📅 <strong>Latest News:</strong> Past ${dateRange} • Showing ${showingCount} articles (max ${maxPossible})`;
 
     if (searchKeywords) {
       const expandedNote = isExpanded ? ' (expanded search)' : '';
-      statusText = `🔍 <strong>Search Results:</strong> "${searchKeywords}" (Past ${dateRange}${expandedNote}) • ${summaries.length} matching articles`;
+      statusText = `🔍 <strong>Search Results:</strong> "${searchKeywords}" (Past ${dateRange}${expandedNote}) • Showing ${showingCount} articles (max ${maxPossible})`;
 
       if (isExpanded) {
         statusText += `<br><small>💡 Expanded to 2 weeks to find more results for your search</small>`;
@@ -187,9 +388,10 @@ class NewsPopup {
       console.log('Summary URL:', summary.url);
       console.log('Summary title:', summary.title);
       console.log('Summary source:', summary.source);
-      
+
       const item = document.createElement('div');
       item.className = 'summary-item';
+      item.style.cssText = 'background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; margin-bottom: 8px; border-left: 3px solid #1a73e8;';
 
       // Create title link that uses Chrome tabs API
       const titleLink = document.createElement('a');
@@ -255,39 +457,19 @@ class NewsPopup {
         }
       });
 
-      // Create category and time info with content analysis indicator
-      const metaInfo = document.createElement('div');
-      metaInfo.className = 'summary-meta';
-      metaInfo.style.cssText = 'font-size: 11px; color: #666; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;';
+      // Old unused code removed - we only show hyperlinks with time and source
 
-      const categoryText = summary.category || 'News';
-      const timeText = summary.timeAgo || 'Recent';
-      
-      // Add content analysis badge
-      let contentBadge = '';
-      if (summary.hasFullContent) {
-        contentBadge = '<span style="background: #4CAF50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold;">📄 DEEP ANALYSIS</span>';
-      } else {
-        contentBadge = '<span style="background: #FF9800; color: white; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold;">📰 RSS SUMMARY</span>';
-      }
-      
-      metaInfo.innerHTML = `${categoryText} • ${timeText} ${contentBadge}`;
-
-      // Create summary text
-      const summaryText = document.createElement('div');
-      summaryText.className = 'summary-text';
-      summaryText.textContent = summary.summary;
-
-      // Create source info
-      const sourceInfo = document.createElement('div');
-      sourceInfo.className = 'summary-source';
-      sourceInfo.textContent = summary.source;
-
-      // Assemble the item
-      item.appendChild(metaInfo);
+      // Add hyperlink and meta info
       item.appendChild(titleLink);
-      item.appendChild(summaryText);
-      item.appendChild(sourceInfo);
+
+      // Add time and source information
+      const metaInfo = document.createElement('div');
+      metaInfo.className = 'article-meta';
+      const timeText = summary.timeAgo || 'Recent';
+      const sourceText = summary.source || 'Unknown';
+      metaInfo.textContent = `${timeText} • ${sourceText}`;
+      metaInfo.style.cssText = 'font-size: 11px; color: #999; margin-top: 4px; font-style: italic;';
+      item.appendChild(metaInfo);
 
       this.summaryList.appendChild(item);
     });
@@ -295,8 +477,10 @@ class NewsPopup {
     // Store articles for overall summary
     this.currentArticles = summaries;
 
-    // Sync articles to dashboard
-    this.syncToDashboard(summaries);
+    // Update view more button visibility
+    this.updateViewMoreButton();
+
+
 
     this.showResults();
 
@@ -304,29 +488,150 @@ class NewsPopup {
     if (summaries.length >= 1) {
       this.generateOverallSummaryAutomatically();
     }
+
+
   }
 
-  async syncToDashboard(summaries) {
-    try {
-      const newsType = 'general';
-      const articlesWithCategory = summaries.map(summary => ({
-        ...summary,
-        category: newsType,
-        timestamp: Date.now()
-      }));
+  appendArticlesToDisplay(summaries) {
+    summaries.forEach((summary, index) => {
+      console.log(`=== APPENDING SUMMARY ${index} DEBUG ===`);
+      console.log('Summary object:', summary);
 
-      chrome.runtime.sendMessage({
-        action: 'syncToDashboard',
-        articles: articlesWithCategory
-      }, (response) => {
-        if (response && response.success) {
-          console.log('Articles synced to dashboard:', response.count);
+      const item = document.createElement('div');
+      item.className = 'summary-item';
+      item.style.cssText = 'background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; margin-bottom: 8px; border-left: 3px solid #1a73e8;';
+
+      // Create title link that uses Chrome tabs API
+      const titleLink = document.createElement('a');
+      titleLink.href = summary.url;
+      titleLink.className = 'summary-title';
+      titleLink.textContent = summary.title + ' ↗';
+      titleLink.title = 'Click to open article in new tab';
+      titleLink.target = '_blank';
+      titleLink.addEventListener('click', (e) => {
+        console.log('=== LINK CLICK DEBUG ===');
+        console.log('Link clicked:', summary.title);
+        console.log('URL to open:', summary.url);
+
+        let urlToOpen = summary.url;
+        if (!urlToOpen || !urlToOpen.startsWith('http')) {
+          console.warn('Invalid URL, skipping article');
+          this.showError('Invalid article URL');
+          e.preventDefault();
+          return;
+        }
+
+        if (e.ctrlKey || e.metaKey || e.button === 1) {
+          console.log('User modifier detected, allowing default behavior');
+          return;
+        }
+
+        e.preventDefault();
+
+        titleLink.style.color = '#666';
+        titleLink.textContent = summary.title + ' ⏳ Opening...';
+
+        console.log('Opening URL with Chrome tabs API...');
+
+        if (chrome && chrome.tabs && chrome.tabs.create) {
+          chrome.tabs.create({ url: urlToOpen }, (tab) => {
+            if (chrome.runtime.lastError) {
+              console.error('Chrome tabs failed:', chrome.runtime.lastError.message);
+              try {
+                window.open(urlToOpen, '_blank');
+                console.log('window.open fallback succeeded');
+              } catch (e) {
+                console.error('All methods failed:', e);
+                this.showError('Could not open article. URL: ' + urlToOpen);
+              }
+            } else {
+              console.log('✅ Article opened successfully in tab:', tab.id);
+            }
+
+            setTimeout(() => {
+              titleLink.style.color = '';
+              titleLink.textContent = summary.title + ' ↗';
+            }, 1000);
+          });
+        } else {
+          console.log('Chrome tabs not available, using window.open');
+          try {
+            window.open(urlToOpen, '_blank');
+            console.log('window.open succeeded');
+          } catch (e) {
+            console.error('window.open failed:', e);
+            this.showError('Could not open article. URL: ' + urlToOpen);
+          }
         }
       });
-    } catch (error) {
-      console.error('Error syncing to dashboard:', error);
+
+      // Add hyperlink and meta info
+      item.appendChild(titleLink);
+
+      // Add time and source information
+      const metaInfo = document.createElement('div');
+      metaInfo.className = 'article-meta';
+      const timeText = summary.timeAgo || 'Recent';
+      const sourceText = summary.source || 'Unknown';
+      metaInfo.textContent = `${timeText} • ${sourceText}`;
+      metaInfo.style.cssText = 'font-size: 11px; color: #999; margin-top: 4px; font-style: italic;';
+      item.appendChild(metaInfo);
+
+      this.summaryList.appendChild(item);
+    });
+
+    // Update the status header
+    this.updateStatusHeader();
+  }
+
+  updateViewMoreButton() {
+    console.log('🔄 Updating View More button...');
+
+    const viewMoreContainer = document.getElementById('viewMoreContainer');
+    const viewMoreBtn = document.getElementById('viewMoreBtn');
+    const viewMoreText = document.getElementById('viewMoreText');
+
+    if (!viewMoreContainer || !viewMoreBtn || !viewMoreText) {
+      console.log('❌ View More elements not found!');
+      return;
+    }
+
+    const canLoadMore = this.totalArticlesLoaded < this.maxArticles && this.totalArticlesLoaded === 5;
+
+    console.log(`📊 Articles loaded: ${this.totalArticlesLoaded}/${this.maxArticles}, Can load more: ${canLoadMore}`);
+
+    if (canLoadMore) {
+      viewMoreText.textContent = 'View 5 More Articles';
+      viewMoreContainer.style.display = 'block';
+      console.log('✅ View More button shown - can fetch 5 more articles');
+    } else {
+      viewMoreContainer.style.display = 'none';
+      if (this.totalArticlesLoaded >= this.maxArticles) {
+        console.log('❌ View More button hidden - reached maximum 10 articles');
+      } else {
+        console.log('❌ View More button hidden - not enough articles loaded yet');
+      }
     }
   }
+
+  updateStatusHeader() {
+    const statusHeader = this.summaryList.querySelector('div[style*="background"]');
+    if (!statusHeader) return;
+
+    const showingCount = this.displayedArticles.length;
+    const totalCount = this.allAvailableArticles.length;
+    const keywords = document.getElementById('keywordInput').value.trim();
+
+    let statusText = `📅 <strong>Latest News:</strong> Showing ${showingCount} of ${totalCount} articles`;
+
+    if (keywords) {
+      statusText = `🔍 <strong>Search Results:</strong> "${keywords}" • Showing ${showingCount} of ${totalCount} matching articles`;
+    }
+
+    statusHeader.innerHTML = statusText;
+  }
+
+
 
   async generateOverallSummaryAutomatically() {
     const summaryLoadingState = document.getElementById('summaryLoadingState');
@@ -337,7 +642,7 @@ class NewsPopup {
       if (summaryLoadingState) summaryLoadingState.style.display = 'flex';
       if (overallSummaryContent) overallSummaryContent.style.display = 'none';
 
-      console.log('Auto-generating summary for', this.currentArticles.length, 'articles using Enhanced Summarizer API');
+      console.log('Auto-generating summary for', this.displayedArticles.length, 'articles using Enhanced Summarizer API');
 
       // Use only Enhanced Summarizer API
       await this.generateSummaryWithEnhancedSummarizerAuto();
@@ -380,7 +685,7 @@ class NewsPopup {
       expectedInputLanguages: ["en"],       // Expect English input
       outputLanguage: "en",                  // Output in English
       expectedContextLanguages: ["en"],     // Context in English
-      sharedContext: this.currentArticles.length === 1
+      sharedContext: this.displayedArticles.length === 1
         ? "This is a news article from a major news source (BBC, NPR, New York Times, NBC News, or Fox News). The user expects a detailed analysis of the key points, main facts, and important developments from this article."
         : "These are news articles from various sources including BBC, NPR, New York Times, NBC News, and Fox News. The user expects a concise summary highlighting the main points and key developments from each article."
     });
@@ -389,12 +694,12 @@ class NewsPopup {
 
     // Prepare content for summarization
     const articlesText = this.prepareContentForSummarization();
-    console.log(`📄 Content prepared: ${articlesText.length} characters from ${this.currentArticles.length} articles`);
+    console.log(`📄 Content prepared: ${articlesText.length} characters from ${this.displayedArticles.length} articles`);
 
     // Generate summary with context
     console.log('🔄 Generating enhanced summary...');
     const summary = await summarizer.summarize(articlesText, {
-      context: `This summary is for a news reader who wants to quickly understand the main developments across ${this.currentArticles.length} articles from multiple news sources.`
+      context: `This summary is for a news reader who wants to quickly understand the main developments across ${this.displayedArticles.length} articles from multiple news sources.`
     });
 
     console.log('✅ Enhanced summary generated successfully');
@@ -412,7 +717,7 @@ class NewsPopup {
   // Prepare content for summarization following best practices
   prepareContentForSummarization() {
     // Combine articles with proper structure for better summarization
-    const articlesText = this.currentArticles.map((article, index) => {
+    const articlesText = this.displayedArticles.map((article, index) => {
       // Use full content if available, otherwise use summary
       const contentToUse = article.hasFullContent && article.content ?
         article.content.substring(0, 1000) : // Limit full content to 1000 chars per article
@@ -427,8 +732,8 @@ Content: ${contentToUse}
     }).join('\n\n');
 
     // Add context header for better summarization
-    const fullContentCount = this.currentArticles.filter(a => a.hasFullContent).length;
-    const isSingleArticle = this.currentArticles.length === 1;
+    const fullContentCount = this.displayedArticles.filter(a => a.hasFullContent).length;
+    const isSingleArticle = this.displayedArticles.length === 1;
 
     const contextHeader = isSingleArticle
       ? `News Analysis Request:
@@ -436,7 +741,7 @@ Please analyze this news article and extract the key points, main facts, and imp
 
 `
       : `News Summary Request:
-Please create a comprehensive summary of these ${this.currentArticles.length} news articles (${fullContentCount} with full content analysis):
+Please create a comprehensive summary of these ${this.displayedArticles.length} news articles (${fullContentCount} with full content analysis):
 
 `;
 
@@ -456,8 +761,8 @@ Please create a comprehensive summary of these ${this.currentArticles.length} ne
     const overallSummaryContent = document.getElementById('overallSummaryContent');
 
     // Add analysis depth indicator
-    const fullContentCount = this.currentArticles.filter(a => a.hasFullContent).length;
-    const totalCount = this.currentArticles.length;
+    const fullContentCount = this.displayedArticles.filter(a => a.hasFullContent).length;
+    const totalCount = this.displayedArticles.length;
     const isSingleArticle = totalCount === 1;
 
     let analysisIndicator = '';
@@ -574,7 +879,7 @@ Please create a comprehensive summary of these ${this.currentArticles.length} ne
       this.btnText.textContent = 'Processing...';
       this.spinner.classList.remove('hidden');
     } else {
-      this.btnText.textContent = 'Fetch & Summarize';
+      this.btnText.textContent = 'Get My News';
       this.spinner.classList.add('hidden');
     }
   }
@@ -586,6 +891,7 @@ Please create a comprehensive summary of these ${this.currentArticles.length} ne
   hideResults() {
     this.results.classList.add('hidden');
     this.resetSummaryState();
+    this.resetPaginationState();
   }
 
   resetSummaryState() {
@@ -599,6 +905,17 @@ Please create a comprehensive summary of these ${this.currentArticles.length} ne
     }
 
     this.hideMethodBadge();
+  }
+
+  resetPaginationState() {
+    this.allAvailableArticles = [];
+    this.displayedArticles = [];
+    this.currentPage = 0;
+
+    const viewMoreContainer = document.getElementById('viewMoreContainer');
+    if (viewMoreContainer) {
+      viewMoreContainer.style.display = 'none';
+    }
   }
 
   showError(message) {
@@ -624,39 +941,12 @@ Please create a comprehensive summary of these ${this.currentArticles.length} ne
     }
   }
 
-  openDashboard() {
-    const dashboardUrl = 'http://localhost:8080';
 
-    chrome.tabs.create({ url: dashboardUrl }, (tab) => {
-      if (chrome.runtime.lastError) {
-        this.showDashboardInstructions();
-      }
-    });
-  }
-
-  showDashboardInstructions() {
-    const instructions = `
-To use the News Dashboard:
-
-1. Open Terminal/Command Prompt
-2. Navigate to the news-dashboard folder
-3. Run: python server.py
-4. Dashboard will open at http://localhost:8080
-
-Or simply open news-dashboard/index.html in your browser!
-    `;
-
-    alert(instructions);
-
-    const fileUrl = window.location.protocol === 'file:' ?
-      '../news-dashboard/index.html' :
-      'news-dashboard/index.html';
-
-    chrome.tabs.create({ url: fileUrl });
-  }
 }
 
 // Initialize popup when DOM is loaded
+// Initialize popup when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('🎯 DOM loaded, initializing News Buddy...');
   new NewsPopup();
 });

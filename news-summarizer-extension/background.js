@@ -8,15 +8,22 @@ class NewsBackground {
       if (request.action === 'fetchNews') {
         this.handleFetchNews(request, sendResponse);
         return true; // Keep message channel open for async response
+      } else if (request.action === 'fetchArticlesOnly') {
+        this.handleFetchArticlesOnly(request, sendResponse);
+        return true;
+      } else if (request.action === 'summarizeArticles') {
+        this.handleSummarizeArticles(request, sendResponse);
+        return true;
+      } else if (request.action === 'fetchMoreArticles') {
+        this.handleFetchMoreArticles(request, sendResponse);
+        return true;
       } else if (request.action === 'openTab') {
         this.handleOpenTab(request, sendResponse);
         return true;
       } else if (request.action === 'checkAiStatus') {
         this.handleCheckAiStatus(request, sendResponse);
         return true;
-      } else if (request.action === 'syncToDashboard') {
-        this.handleSyncToDashboard(request, sendResponse);
-        return true;
+
       } else if (request.action === 'fetchRealNews') {
         this.handleFetchRealNews(request, sendResponse);
         return true;
@@ -44,20 +51,127 @@ class NewsBackground {
     });
   }
 
-  async handleSyncToDashboard(request, sendResponse) {
+
+
+  async handleFetchArticlesOnly(request, sendResponse) {
     try {
+      console.log('Background: Fetching articles only (no summarization):', request);
+      const { sources, newsType, keywords = '' } = request;
+
+      if (!sources || sources.length === 0) {
+        throw new Error('No news sources selected');
+      }
+
+      console.log('Background: Fetching articles from RSS feeds...');
+      const result = await this.fetchArticles(sources, newsType, keywords);
+      const articles = result.articles;
+      const searchInfo = result.searchInfo;
+      
+      console.log('Background: Got articles:', articles.length);
+
+      if (articles.length === 0) {
+        let errorMessage;
+        if (keywords && keywords.trim()) {
+          if (searchInfo.expandedSearch) {
+            errorMessage = `No articles found matching keywords: "${keywords}" in the past 2 weeks. Try different keywords, check spelling, or remove keywords for general news.`;
+          } else {
+            errorMessage = `No articles found matching keywords: "${keywords}" in the past 24 hours. Try different keywords, check spelling, or remove keywords for general news.`;
+          }
+        } else {
+          errorMessage = 'No articles available at the moment. This might be due to RSS feed connectivity issues. Please try again later.';
+        }
+        
+        sendResponse({
+          articles: [],
+          message: errorMessage,
+          searchInfo: searchInfo
+        });
+        return;
+      }
+
+      console.log('Background: Fetching full article content from hyperlinks...');
+      const articlesWithFullContent = await this.fetchFullArticleContent(articles);
+      
+      sendResponse({ 
+        articles: articlesWithFullContent,
+        dateRange: searchInfo.dateRange,
+        keywordSearch: searchInfo.keywordSearch,
+        searchInfo: searchInfo
+      });
+    } catch (error) {
+      console.error('Background: Error in handleFetchArticlesOnly:', error);
+      sendResponse({ error: error.message });
+    }
+  }
+
+  async handleSummarizeArticles(request, sendResponse) {
+    try {
+      console.log('Background: Summarizing articles:', request.articles.length);
       const { articles } = request;
 
-      // Store articles in extension storage for dashboard sync
-      await chrome.storage.local.set({
-        dashboardArticles: articles,
-        lastSync: Date.now()
-      });
+      if (!articles || articles.length === 0) {
+        throw new Error('No articles to summarize');
+      }
 
-      console.log('Articles synced to dashboard storage:', articles.length);
-      sendResponse({ success: true, count: articles.length });
+      console.log('Background: Summarizing articles...');
+      const summaries = await this.summarizeArticles(articles);
+      console.log('Background: Got summaries:', summaries.length);
+
+      sendResponse({ summaries: summaries });
     } catch (error) {
-      console.error('Error syncing to dashboard:', error);
+      console.error('Background: Error in handleSummarizeArticles:', error);
+      sendResponse({ error: error.message });
+    }
+  }
+
+  async handleFetchMoreArticles(request, sendResponse) {
+    try {
+      console.log('Background: Fetching 5 MORE fresh articles...');
+      const { sources, newsType, keywords = '', excludeUrls = [] } = request;
+
+      if (!sources || sources.length === 0) {
+        throw new Error('No news sources selected');
+      }
+
+      // Fetch more articles for "View More" - get up to 15 articles to have a good pool
+      const result = await this.fetchArticlesForViewMore(sources, newsType, keywords);
+      let articles = result.articles;
+      const searchInfo = result.searchInfo;
+      
+      console.log('Background: Fetched', articles.length, 'total articles');
+      
+      // Filter out articles that were already shown (by URL)
+      if (excludeUrls && excludeUrls.length > 0) {
+        const originalCount = articles.length;
+        articles = articles.filter(article => !excludeUrls.includes(article.url));
+        console.log('Background: Filtered out', originalCount - articles.length, 'duplicate articles');
+      }
+      
+      // Take up to 5 new articles
+      const moreArticles = articles.slice(0, 5);
+      
+      console.log('Background: Got', moreArticles.length, 'new articles');
+
+      if (moreArticles.length === 0) {
+        sendResponse({
+          articles: [],
+          message: 'No more new articles available',
+          searchInfo: searchInfo
+        });
+        return;
+      }
+
+      // Fetch full content for the additional articles
+      const articlesWithFullContent = await this.fetchFullArticleContent(moreArticles);
+      
+      sendResponse({ 
+        articles: articlesWithFullContent,
+        dateRange: searchInfo.dateRange,
+        keywordSearch: searchInfo.keywordSearch,
+        searchInfo: searchInfo
+      });
+    } catch (error) {
+      console.error('Background: Error in handleFetchMoreArticles:', error);
       sendResponse({ error: error.message });
     }
   }
@@ -508,7 +622,40 @@ class NewsBackground {
     }
 
     return {
-      articles: filteredArticles.slice(0, 10), // Limit to 10 articles for performance
+      articles: filteredArticles.slice(0, 5), // Limit to 5 articles initially
+      searchInfo: searchInfo
+    };
+  }
+
+  async fetchArticlesForViewMore(sources, newsType, keywords = '') {
+    const allArticles = [];
+
+    for (const source of sources) {
+      try {
+        const articles = await this.fetchRSSArticles(source, newsType);
+        allArticles.push(...articles);
+      } catch (error) {
+        console.error(`Error fetching from ${source}:`, error);
+      }
+    }
+
+    // Filter by keywords if provided
+    let filteredArticles = allArticles;
+    let searchInfo = {
+      dateRange: '24 hours',
+      keywordSearch: false,
+      expandedSearch: false,
+      websiteSearch: false
+    };
+
+    if (keywords && keywords.trim()) {
+      searchInfo.keywordSearch = true;
+      filteredArticles = this.filterArticlesByKeywords(allArticles, keywords);
+      console.log(`Filtered ${allArticles.length} articles to ${filteredArticles.length} based on keywords: "${keywords}"`);
+    }
+
+    return {
+      articles: filteredArticles.slice(0, 15), // Get up to 15 articles for "View More"
       searchInfo: searchInfo
     };
   }

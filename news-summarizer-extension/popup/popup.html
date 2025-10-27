@@ -8,7 +8,7 @@
 
 <body>
   <div class="container">
-    <h1>News Summarizer</h1>
+    <h1>News Buddy</h1>
 
     <div class="section">
       <h3>Select News Sources</h3>
@@ -71,7 +71,7 @@
     </div>
 
     <button id="fetchBtn" class="fetch-button">
-      <span id="btnText">Fetch & Summarize</span>
+      <span id="btnText">Get My News</span>
       <div id="spinner" class="spinner hidden"></div>
     </button>
 
@@ -98,12 +98,18 @@
         <div class="articles-column">
           <h3>📰 News Articles</h3>
           <div id="summaryList"></div>
+          <div id="viewMoreContainer" class="view-more-container" style="display: none;">
+            <button id="viewMoreBtn" class="view-more-button">
+              <span id="viewMoreText">View More Articles</span>
+              <div id="viewMoreSpinner" class="spinner hidden"></div>
+            </button>
+          </div>
         </div>
         
         <!-- Right Column: Overall Summary -->
         <div class="summary-column">
           <div class="summary-header">
-            <h3>📋 AI Analysis</h3>
+            <h3>📋 AI Summary</h3>
             <div id="summaryMethodBadge" class="method-badge" style="display: none;"></div>
           </div>
           <div id="overallSummaryContainer">
@@ -120,7 +126,7 @@
     <div id="error" class="error hidden"></div>
   </div>
 
-  <script src="popup.js"></script>
+  <script src="popup-clean.js"></script>
 </body>
 
 </html>

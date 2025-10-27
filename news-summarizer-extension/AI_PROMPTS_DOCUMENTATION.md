@@ -1,7 +1,7 @@
 # AI Prompts for Website-Specific News Generation
 
 ## Overview
-This document explains where and how AI prompts are used to fetch news from particular websites in the News Summarizer Extension.
+This document explains where and how AI prompts are used to fetch news from particular websites in the News Buddy Extension.
 
 ## Location of AI Prompts
 
